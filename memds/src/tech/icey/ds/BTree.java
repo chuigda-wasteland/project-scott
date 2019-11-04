@@ -6,18 +6,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 class BTreeNode {
-    public BTreeNode(int degree, BTreeNode parent, List<String> keys, List<BTreeNode> children) {
+    BTreeNode(int degree, BTreeNode parent, List<String> keys, List<BTreeNode> children) {
         this.parent = parent;
         this.degree = degree;
         this.keys = keys;
         this.children = children;
     }
 
-    private boolean isLeaf() {
-        return this.children.size() == 0;
-    }
-
-    public BTreeNode insert(String key) {
+    BTreeNode insert(String key) {
         if (this.isLeaf()) {
             return leafInsert(key);
         } else {
@@ -25,8 +21,24 @@ class BTreeNode {
         }
     }
 
+    void traverse(List<String> outputKeys) {
+        if (isLeaf()) {
+            outputKeys.addAll(ListUtil.copy(keys));
+        } else {
+            for (int i = 0; i < outputKeys.size(); i++) {
+                children.get(i).traverse(outputKeys);
+                outputKeys.add(keys.get(i));
+            }
+            children.get(children.size() - 1).traverse(outputKeys);
+        }
+    }
+
+    private boolean isLeaf() {
+        return this.children.size() == 0;
+    }
+
     private BTreeNode leafInsert(String key) {
-        int insertionPoint = findInsertPoint(key);
+        var insertionPoint = findInsertPoint(key);
         if (insertionPoint == keys.size()) {
             keys.add(key);
         } else {
@@ -37,7 +49,7 @@ class BTreeNode {
     }
 
     private BTreeNode nonLeafInsert(String key) {
-        int insertionPoint = findInsertPoint(key);
+        var insertionPoint = findInsertPoint(key);
         return children.get(insertionPoint).insert(key);
     }
 
@@ -56,16 +68,29 @@ class BTreeNode {
             if (parent == null) {
                 return new BTreeNode(degree, null, List.of(powder), List.of(leftNode, rightNode));
             } else {
-                return parent.onChildExplode(powder, leftNode, rightNode);
+                return parent.onChildExplode(this, powder, leftNode, rightNode);
             }
         } else {
             return null;
         }
     }
 
-    private BTreeNode onChildExplode(String powder, BTreeNode leftChild, BTreeNode rightChild) {
-        /// TODO implement this
-        return null;
+    private BTreeNode onChildExplode(BTreeNode exploded, String powder, BTreeNode leftChild, BTreeNode rightChild) {
+        var explodedIndex = findChild(exploded);
+        children.remove(explodedIndex);
+        children.add(explodedIndex, rightChild);
+        children.add(explodedIndex, leftChild);
+        keys.add(explodedIndex - 1, powder);
+        return maybeExplode();
+    }
+
+    private int findChild(BTreeNode child) {
+        for (int i = 0; i < children.size(); i++) {
+            if (children.get(i) == child) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private int findInsertPoint(String key) {
@@ -88,6 +113,21 @@ class BTreeNode {
 
 public class BTree {
     public BTree(int degree) {
-
+        this.rootNode = new BTreeNode(degree, null, new ArrayList<>(), new ArrayList<>());
     }
+
+    public void insert(String key) {
+        var newRoot = rootNode.insert(key);
+        if (newRoot != null) {
+            rootNode = newRoot;
+        }
+    }
+
+    public List<String> traverse() {
+        var ret = new ArrayList<String>();
+        rootNode.traverse(ret);
+        return ret;
+    }
+
+    private BTreeNode rootNode;
 }
