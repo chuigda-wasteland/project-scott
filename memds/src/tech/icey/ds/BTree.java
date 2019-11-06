@@ -11,6 +11,9 @@ class BTreeNode {
         this.degree = degree;
         this.keys = keys;
         this.children = children;
+
+        this.leftSibling = null;
+        this.rightSibling = null;
     }
 
     BTreeNode insert(String key) {
@@ -70,6 +73,9 @@ class BTreeNode {
             var leftNode = new BTreeNode(degree, null, leftKeys, leftChildren);
             var rightNode = new BTreeNode(degree, null, rightKeys, rightChildren);
 
+            leftNode.setSibling(this.leftSibling, rightNode);
+            rightNode.setSibling(leftNode, this.rightSibling);
+
             if (parent == null) {
                 var newRoot = new BTreeNode(degree, null,
                                             ListUtil.copy(List.of(powder)),
@@ -100,6 +106,11 @@ class BTreeNode {
         this.parent = parent;
     }
 
+    private void setSibling(BTreeNode leftSibling, BTreeNode rightSibling) {
+        this.leftSibling = leftSibling;
+        this.rightSibling = rightSibling;
+    }
+
     private int findChild(BTreeNode child) {
         for (int i = 0; i < children.size(); i++) {
             if (children.get(i) == child) {
@@ -119,6 +130,8 @@ class BTreeNode {
     }
 
     private BTreeNode parent;
+
+    private BTreeNode leftSibling, rightSibling;
 
     private int degree;
 
