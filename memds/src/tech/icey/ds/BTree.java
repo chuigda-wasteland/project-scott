@@ -128,7 +128,17 @@ class BTreeNode {
     }
 
     private BTreeNode onChildShrink(BTreeNode left, BTreeNode right, BTreeNode newNode, int separatorIndex) {
-        return null;
+        keys.remove(separatorIndex);
+        children.remove(left);
+        children.remove(right);
+        children.add(separatorIndex, newNode);
+
+        if (this.parent == null && this.keys.size() == 0) {
+            newNode.parent = null;
+            return newNode;
+        }
+
+        return maybeShrink();
     }
 
     private enum WhichSiblingChoosed {

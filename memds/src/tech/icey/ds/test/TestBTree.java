@@ -7,7 +7,7 @@ import java.util.Collections;
 
 public class TestBTree {
     public static void main(String[] args) {
-        var btree = new BTree(3);
+        var btree = new BTree(10);
         var elemList = new ArrayList<String>();
         for (int i = 1; i <= 99; i++) {
             elemList.add(Integer.toString(i));
