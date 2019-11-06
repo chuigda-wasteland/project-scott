@@ -55,6 +55,10 @@ class BTreeNode {
     }
 
     private BTreeNode maybeShrink() {
+        if (this.parent == null) {
+            return null;
+        }
+
         if (this.keys.size() * 2 < degree) {
             var siblingChoosed = chooseSibling();
             var sibling = siblingChoosed.getFirst();
@@ -85,18 +89,30 @@ class BTreeNode {
             if (sibling.keys.size() + keys.size() < degree) {
                 var newNode = new BTreeNode(degree, parent, allKeys, new ArrayList<>());
                 if (whichSibling == WhichSiblingChoosed.LeftSibling) {
-                    newNode.setSibling(sibling.leftSibling, this.rightSibling);
-                    return onChildShrink(sibling, this, newNode, separatorIndex);
+                    newNode.setSiblings(sibling.leftSibling, this.rightSibling);
+                    if (sibling.leftSibling != null) {
+                        sibling.leftSibling.setRightSibling(newNode);
+                    }
+                    if (this.rightSibling != null) {
+                        this.rightSibling.setLeftSibling(newNode);
+                    }
+                    return parent.onChildShrink(sibling, this, newNode, separatorIndex);
                 } else {
-                    newNode.setSibling(this.leftSibling, sibling.rightSibling);
-                    return onChildShrink(this, sibling, newNode, separatorIndex);
+                    newNode.setSiblings(this.leftSibling, sibling.rightSibling);
+                    if (this.leftSibling != null) {
+                        this.leftSibling.setRightSibling(newNode);
+                    }
+                    if (sibling.rightSibling != null) {
+                        sibling.rightSibling.setLeftSibling(newNode);
+                    }
+                    return parent.onChildShrink(this, sibling, newNode, separatorIndex);
                 }
             } else {
                 var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
                 var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2, allKeys.size()));
                 var newSpearator = allKeys.get(allKeys.size() / 2);
-                var leftChildren = ListUtil.copy(allChildren.subList(0, allKeys.size() / 2));
-                var rightChildren = ListUtil.copy(allChildren.subList(allKeys.size() / 2, allKeys.size()));
+                var leftChildren = ListUtil.copy(allChildren.subList(0, allChildren.size() / 2));
+                var rightChildren = ListUtil.copy(allChildren.subList(allChildren.size() / 2, allChildren.size()));
                 if (whichSibling == WhichSiblingChoosed.LeftSibling) {
                     sibling.keys = leftKeys;
                     this.keys = rightKeys;
@@ -214,8 +230,14 @@ class BTreeNode {
             var leftNode = new BTreeNode(degree, null, leftKeys, leftChildren);
             var rightNode = new BTreeNode(degree, null, rightKeys, rightChildren);
 
-            leftNode.setSibling(this.leftSibling, rightNode);
-            rightNode.setSibling(leftNode, this.rightSibling);
+            if (this.leftSibling != null) {
+                this.leftSibling.setRightSibling(leftNode);
+            }
+            if (this.rightSibling != null) {
+                this.rightSibling.setLeftSibling(rightNode);
+            }
+            leftNode.setSiblings(this.leftSibling, rightNode);
+            rightNode.setSiblings(leftNode, this.rightSibling);
 
             if (parent == null) {
                 var newRoot = new BTreeNode(degree, null,
@@ -247,8 +269,16 @@ class BTreeNode {
         this.parent = parent;
     }
 
-    private void setSibling(BTreeNode leftSibling, BTreeNode rightSibling) {
+    private void setSiblings(BTreeNode leftSibling, BTreeNode rightSibling) {
         this.leftSibling = leftSibling;
+        this.rightSibling = rightSibling;
+    }
+
+    private void setLeftSibling(BTreeNode leftSibling) {
+        this.leftSibling = leftSibling;
+    }
+
+    private void setRightSibling(BTreeNode rightSibling) {
         this.rightSibling = rightSibling;
     }
 
@@ -291,6 +321,14 @@ public class BTree {
         if (newRoot != null) {
             rootNode = newRoot;
         }
+    }
+
+    public boolean delete(String key) {
+        var result = rootNode.delete(key);
+        if (result.getFirst() != null) {
+            rootNode = result.getFirst();
+        }
+        return result.getSecond();
     }
 
     public List<String> traverse() {
