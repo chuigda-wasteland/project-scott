@@ -88,6 +88,9 @@ class BTreeNode {
 
             if (sibling.keys.size() + keys.size() < degree) {
                 var newNode = new BTreeNode(degree, parent, allKeys, new ArrayList<>());
+                for (var child : allChildren) {
+                    child.setParent(newNode);
+                }
                 if (whichSibling == WhichSiblingChoosed.LeftSibling) {
                     newNode.setSiblings(sibling.leftSibling, this.rightSibling);
                     if (sibling.leftSibling != null) {
@@ -118,11 +121,23 @@ class BTreeNode {
                     this.keys = rightKeys;
                     sibling.children = leftChildren;
                     this.children = rightChildren;
+                    for (var child : leftChildren) {
+                        child.setParent(sibling);
+                    }
+                    for (var child : rightChildren) {
+                        child.setParent(this);
+                    }
                 } else {
                     this.keys = leftKeys;
                     sibling.keys = rightKeys;
                     this.children = leftChildren;
                     sibling.children = rightChildren;
+                    for (var child : leftChildren) {
+                        child.setParent(this);
+                    }
+                    for (var child : rightChildren) {
+                        child.setParent(sibling);
+                    }
                 }
                 this.parent.keys.set(separatorIndex, newSpearator);
                 return null;
@@ -229,6 +244,12 @@ class BTreeNode {
                                          : ListUtil.copy(children.subList(keys.size() / 2 + 1, keys.size() + 1));
             var leftNode = new BTreeNode(degree, null, leftKeys, leftChildren);
             var rightNode = new BTreeNode(degree, null, rightKeys, rightChildren);
+            for (var child : leftChildren) {
+                child.setParent(leftNode);
+            }
+            for (var child : rightChildren) {
+                child.setParent(rightNode);
+            }
 
             if (this.leftSibling != null) {
                 this.leftSibling.setRightSibling(leftNode);

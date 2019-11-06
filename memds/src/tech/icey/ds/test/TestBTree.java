@@ -9,7 +9,7 @@ import java.util.TreeSet;
 
 public class TestBTree {
     public static void main(String[] args) {
-        var btree = new BTree(3);
+        var btree = new BTree(4);
         var set = new TreeSet<String>();
         var elemList = new ArrayList<String>();
         for (int i = 1; i <= 99; i++) {
