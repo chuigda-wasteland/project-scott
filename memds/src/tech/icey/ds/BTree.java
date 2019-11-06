@@ -72,16 +72,16 @@ class BTreeNode {
             var allKeys = new ArrayList<String>();
             var allChildren = new ArrayList<BTreeNode>();
 
-            if (whichSibling == WhichSiblingChoosed.LeftSibling) {
+            if (whichSibling == WhichSibling.LeftSibling) {
                 allKeys.addAll(sibling.keys);
-                allKeys.addAll(this.keys);
                 allKeys.add(separator);
+                allKeys.addAll(this.keys);
                 allChildren.addAll(sibling.children);
                 allChildren.addAll(this.children);
             } else {
                 allKeys.addAll(this.keys);
-                allKeys.addAll(sibling.keys);
                 allKeys.add(separator);
+                allKeys.addAll(sibling.keys);
                 allChildren.addAll(this.children);
                 allChildren.addAll(sibling.children);
             }
@@ -91,7 +91,7 @@ class BTreeNode {
                 for (var child : allChildren) {
                     child.setParent(newNode);
                 }
-                if (whichSibling == WhichSiblingChoosed.LeftSibling) {
+                if (whichSibling == WhichSibling.LeftSibling) {
                     newNode.setSiblings(sibling.leftSibling, this.rightSibling);
                     if (sibling.leftSibling != null) {
                         sibling.leftSibling.setRightSibling(newNode);
@@ -116,7 +116,7 @@ class BTreeNode {
                 var newSpearator = allKeys.get(allKeys.size() / 2);
                 var leftChildren = ListUtil.copy(allChildren.subList(0, allChildren.size() / 2));
                 var rightChildren = ListUtil.copy(allChildren.subList(allChildren.size() / 2, allChildren.size()));
-                if (whichSibling == WhichSiblingChoosed.LeftSibling) {
+                if (whichSibling == WhichSibling.LeftSibling) {
                     sibling.keys = leftKeys;
                     this.keys = rightKeys;
                     sibling.children = leftChildren;
@@ -172,19 +172,19 @@ class BTreeNode {
         return maybeShrink();
     }
 
-    private enum WhichSiblingChoosed {
+    private enum WhichSibling {
         LeftSibling, RightSibling
     }
 
-    private Pair<BTreeNode, WhichSiblingChoosed> chooseSibling() {
-        if (this.leftSibling == null) {
-            return new Pair<>(this.rightSibling, WhichSiblingChoosed.RightSibling);
-        } else if (this.rightSibling == null) {
-            return new Pair<>(this.leftSibling, WhichSiblingChoosed.LeftSibling);
+    private Pair<BTreeNode, WhichSibling> chooseSibling() {
+        if (this.leftSibling == null || this.leftSibling.parent != this.parent) {
+            return new Pair<>(this.rightSibling, WhichSibling.RightSibling);
+        } else if (this.rightSibling == null || this.rightSibling.parent != this.parent) {
+            return new Pair<>(this.leftSibling, WhichSibling.LeftSibling);
         } else {
             return this.leftSibling.keys.size() > this.rightSibling.keys.size()
-                       ? new Pair<>(this.leftSibling, WhichSiblingChoosed.LeftSibling)
-                       : new Pair<>(this.rightSibling, WhichSiblingChoosed.RightSibling);
+                       ? new Pair<>(this.leftSibling, WhichSibling.LeftSibling)
+                       : new Pair<>(this.rightSibling, WhichSibling.RightSibling);
         }
     }
 
