@@ -12,3 +12,6 @@ Cargo.lock
 # Intellij idea outputs
 memds/out
 memds/.idea
+
+# Dependencies downloaded by IDEA
+memds/lib

@@ -110,11 +110,7 @@ class BTreeNode {
                     }
                     return parent.onChildrenShrink(this, sibling, newNode, separatorIndex);
                 }
-            }
-            /// TODO: optimize this away
-            /* else if (allKeys.size() == degree) {
-                return null;
-            } */ else {
+            } else {
                 var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
                 var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2 + 1, allKeys.size()));
                 var newSpearator = allKeys.get(allKeys.size() / 2);
