@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 class BTreeNode {
-    public BTreeNode(int degree, BTreeNode parent, List<String> keys, List<BTreeNode> children) {
+    BTreeNode(int degree, BTreeNode parent, List<String> keys, List<BTreeNode> children) {
         this.parent = parent;
         this.degree = degree;
         this.keys = keys;
@@ -17,7 +17,7 @@ class BTreeNode {
         this.rightSibling = null;
     }
 
-    public BTreeNode insert(String key) {
+    BTreeNode insert(String key) {
         if (this.isLeaf()) {
             return leafInsert(key);
         } else {
@@ -25,7 +25,7 @@ class BTreeNode {
         }
     }
 
-    public Pair<BTreeNode, Boolean> delete(String key) {
+    Pair<BTreeNode, Boolean> delete(String key) {
         for (int i = 0; i < keys.size(); i++) {
             if (keys.get(i).equals(key)) {
                 return new Pair<>(localDelete(key, i), true);
@@ -70,26 +70,32 @@ class BTreeNode {
             var separatorIndex = separatorChoosed.getSecond();
 
             var allKeys = new ArrayList<String>();
-            var allChildren = new ArrayList<BTreeNode>();
+            var allChildren = isLeaf() ? null : new ArrayList<BTreeNode>();
 
             if (whichSibling == WhichSibling.LeftSibling) {
                 allKeys.addAll(sibling.keys);
                 allKeys.add(separator);
                 allKeys.addAll(this.keys);
-                allChildren.addAll(sibling.children);
-                allChildren.addAll(this.children);
+                if (allChildren != null) {
+                    allChildren.addAll(sibling.children);
+                    allChildren.addAll(this.children);
+                }
             } else {
                 allKeys.addAll(this.keys);
                 allKeys.add(separator);
                 allKeys.addAll(sibling.keys);
-                allChildren.addAll(this.children);
-                allChildren.addAll(sibling.children);
+                if (allChildren != null) {
+                    allChildren.addAll(this.children);
+                    allChildren.addAll(sibling.children);
+                }
             }
 
             if (allKeys.size() < degree) {
                 var newNode = new BTreeNode(degree, parent, allKeys, allChildren);
-                for (var child : allChildren) {
-                    child.setParent(newNode);
+                if (allChildren != null) {
+                    for (var child : allChildren) {
+                        child.setParent(newNode);
+                    }
                 }
                 if (whichSibling == WhichSibling.LeftSibling) {
                     newNode.setSiblings(sibling.leftSibling, this.rightSibling);
@@ -114,29 +120,36 @@ class BTreeNode {
                 var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
                 var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2 + 1, allKeys.size()));
                 var newSpearator = allKeys.get(allKeys.size() / 2);
-                var leftChildren = ListUtil.copy(allChildren.subList(0, (allChildren.size() + 1) / 2));
-                var rightChildren = ListUtil.copy(allChildren.subList((allChildren.size() + 1) / 2, allChildren.size()));
+                var leftChildren =
+                      allChildren == null ? null : ListUtil.copy(allChildren.subList(0, (allChildren.size() + 1) / 2));
+                var rightChildren =
+                      allChildren == null ? null : ListUtil.copy(allChildren.subList((allChildren.size() + 1) / 2,
+                                                                                      allChildren.size()));
                 if (whichSibling == WhichSibling.LeftSibling) {
                     sibling.keys = leftKeys;
                     this.keys = rightKeys;
                     sibling.children = leftChildren;
                     this.children = rightChildren;
-                    for (var child : leftChildren) {
-                        child.setParent(sibling);
-                    }
-                    for (var child : rightChildren) {
-                        child.setParent(this);
+                    if (allChildren != null) {
+                        for (var child : leftChildren) {
+                            child.setParent(sibling);
+                        }
+                        for (var child : rightChildren) {
+                            child.setParent(this);
+                        }
                     }
                 } else {
                     this.keys = leftKeys;
                     sibling.keys = rightKeys;
                     this.children = leftChildren;
                     sibling.children = rightChildren;
-                    for (var child : leftChildren) {
-                        child.setParent(this);
-                    }
-                    for (var child : rightChildren) {
-                        child.setParent(sibling);
+                    if (allChildren != null) {
+                        for (var child : leftChildren) {
+                            child.setParent(this);
+                        }
+                        for (var child : rightChildren) {
+                            child.setParent(sibling);
+                        }
                     }
                 }
                 this.parent.keys.set(separatorIndex, newSpearator);
@@ -209,7 +222,7 @@ class BTreeNode {
     }
 
     private boolean isLeaf() {
-        return this.children.size() == 0;
+        return this.children == null;
     }
 
     private BTreeNode leafInsert(String key) {
@@ -238,17 +251,19 @@ class BTreeNode {
             var powder = keys.get(keys.size() / 2);
             var leftKeys = ListUtil.copy(keys.subList(0, keys.size() / 2));
             var rightKeys = ListUtil.copy(keys.subList(keys.size() / 2 + 1, keys.size()));
-            var leftChildren = isLeaf() ? new ArrayList<BTreeNode>()
-                                        : ListUtil.copy(children.subList(0, keys.size() / 2 + 1));
-            var rightChildren = isLeaf() ? new ArrayList<BTreeNode>()
-                                         : ListUtil.copy(children.subList(keys.size() / 2 + 1, keys.size() + 1));
-            var leftNode = new BTreeNode(degree, null, leftKeys, leftChildren);
-            var rightNode = new BTreeNode(degree, null, rightKeys, rightChildren);
-            for (var child : leftChildren) {
-                child.setParent(leftNode);
-            }
-            for (var child : rightChildren) {
-                child.setParent(rightNode);
+            var leftNode = new BTreeNode(degree, null, leftKeys, null);
+            var rightNode = new BTreeNode(degree, null, rightKeys, null);
+            if (!isLeaf()) {
+                var leftChildren = ListUtil.copy(children.subList(0, keys.size() / 2 + 1));
+                var rightChildren = ListUtil.copy(children.subList(keys.size() / 2 + 1, keys.size() + 1));
+                for (var child : leftChildren) {
+                    child.setParent(leftNode);
+                }
+                for (var child : rightChildren) {
+                    child.setParent(rightNode);
+                }
+                leftNode.setChildren(leftChildren);
+                rightNode.setChildren(rightChildren);
             }
 
             if (this.leftSibling != null) {
@@ -273,6 +288,10 @@ class BTreeNode {
         } else {
             return null;
         }
+    }
+
+    private void setChildren(ArrayList<BTreeNode> children) {
+        this.children = children;
     }
 
     private BTreeNode onChildExplode(BTreeNode exploded, String powder, BTreeNode leftChild, BTreeNode rightChild) {
@@ -334,7 +353,7 @@ class BTreeNode {
 
 public class BTree {
     public BTree(int degree) {
-        this.rootNode = new BTreeNode(degree, null, new ArrayList<>(), new ArrayList<>());
+        this.rootNode = new BTreeNode(degree, null, new ArrayList<>(), null);
     }
 
     public void insert(String key) {
