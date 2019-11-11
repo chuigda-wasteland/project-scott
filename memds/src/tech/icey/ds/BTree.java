@@ -87,7 +87,7 @@ class BTreeNode {
             }
 
             if (allKeys.size() < degree) {
-                var newNode = new BTreeNode(degree, parent, allKeys, new ArrayList<>());
+                var newNode = new BTreeNode(degree, parent, allKeys, allChildren);
                 for (var child : allChildren) {
                     child.setParent(newNode);
                 }
