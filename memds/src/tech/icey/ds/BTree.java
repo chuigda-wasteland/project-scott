@@ -86,7 +86,7 @@ class BTreeNode {
                 allChildren.addAll(sibling.children);
             }
 
-            if (sibling.keys.size() + keys.size() < degree) {
+            if (allKeys.size() < degree) {
                 var newNode = new BTreeNode(degree, parent, allKeys, new ArrayList<>());
                 for (var child : allChildren) {
                     child.setParent(newNode);
@@ -99,7 +99,7 @@ class BTreeNode {
                     if (this.rightSibling != null) {
                         this.rightSibling.setLeftSibling(newNode);
                     }
-                    return parent.onChildShrink(sibling, this, newNode, separatorIndex);
+                    return parent.onChildrenShrink(sibling, this, newNode, separatorIndex);
                 } else {
                     newNode.setSiblings(this.leftSibling, sibling.rightSibling);
                     if (this.leftSibling != null) {
@@ -108,14 +108,18 @@ class BTreeNode {
                     if (sibling.rightSibling != null) {
                         sibling.rightSibling.setLeftSibling(newNode);
                     }
-                    return parent.onChildShrink(this, sibling, newNode, separatorIndex);
+                    return parent.onChildrenShrink(this, sibling, newNode, separatorIndex);
                 }
-            } else {
+            }
+            /// TODO: optimize this away
+            /* else if (allKeys.size() == degree) {
+                return null;
+            } */ else {
                 var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
-                var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2, allKeys.size()));
+                var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2 + 1, allKeys.size()));
                 var newSpearator = allKeys.get(allKeys.size() / 2);
-                var leftChildren = ListUtil.copy(allChildren.subList(0, allChildren.size() / 2));
-                var rightChildren = ListUtil.copy(allChildren.subList(allChildren.size() / 2, allChildren.size()));
+                var leftChildren = ListUtil.copy(allChildren.subList(0, (allChildren.size() + 1) / 2));
+                var rightChildren = ListUtil.copy(allChildren.subList((allChildren.size() + 1) / 2, allChildren.size()));
                 if (whichSibling == WhichSibling.LeftSibling) {
                     sibling.keys = leftKeys;
                     this.keys = rightKeys;
@@ -158,7 +162,7 @@ class BTreeNode {
         }
     }
 
-    private BTreeNode onChildShrink(BTreeNode left, BTreeNode right, BTreeNode newNode, int separatorIndex) {
+    private BTreeNode onChildrenShrink(BTreeNode left, BTreeNode right, BTreeNode newNode, int separatorIndex) {
         keys.remove(separatorIndex);
         children.remove(left);
         children.remove(right);
