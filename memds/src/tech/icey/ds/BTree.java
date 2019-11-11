@@ -43,6 +43,18 @@ class BTreeNode {
         }
     }
 
+    void traverse(List<String> outputKeys) {
+        if (isLeaf()) {
+            outputKeys.addAll(ListUtil.copy(keys));
+        } else {
+            for (int i = 0; i < keys.size(); i++) {
+                children.get(i).traverse(outputKeys);
+                outputKeys.add(keys.get(i));
+            }
+            children.get(children.size() - 1).traverse(outputKeys);
+        }
+    }
+
     private Pair<String, Integer> getSeparator(BTreeNode child1, BTreeNode child2) {
         for (int i = 0; i < children.size() - 1; i++) {
             if (children.get(i) == child1 && children.get(i + 1) == child2
@@ -60,14 +72,14 @@ class BTreeNode {
         }
 
         if (this.keys.size() * 2 < degree) {
-            var siblingChoosed = chooseSibling();
-            var sibling = siblingChoosed.getFirst();
-            var whichSibling = siblingChoosed.getSecond();
+            var siblingP = chooseSibling();
+            var sibling = siblingP.getFirst();
+            var whichSibling = siblingP.getSecond();
 
-            var separatorChoosed = this.parent.getSeparator(this, sibling);
-            assert separatorChoosed != null;
-            var separator = separatorChoosed.getFirst();
-            var separatorIndex = separatorChoosed.getSecond();
+            var separatorP = this.parent.getSeparator(this, sibling);
+            assert separatorP != null;
+            var separator = separatorP.getFirst();
+            var separatorIndex = separatorP.getSecond();
 
             var allKeys = new ArrayList<String>();
             var allChildren = isLeaf() ? null : new ArrayList<BTreeNode>();
@@ -209,22 +221,6 @@ class BTreeNode {
         return new Pair<>(it.keys.get(0), it);
     }
 
-    void traverse(List<String> outputKeys) {
-        if (isLeaf()) {
-            outputKeys.addAll(ListUtil.copy(keys));
-        } else {
-            for (int i = 0; i < keys.size(); i++) {
-                children.get(i).traverse(outputKeys);
-                outputKeys.add(keys.get(i));
-            }
-            children.get(children.size() - 1).traverse(outputKeys);
-        }
-    }
-
-    private boolean isLeaf() {
-        return this.children == null;
-    }
-
     private BTreeNode leafInsert(String key) {
         var insertionPoint = findInsertPoint(key);
         if (insertionPoint == keys.size()) {
@@ -290,10 +286,6 @@ class BTreeNode {
         }
     }
 
-    private void setChildren(ArrayList<BTreeNode> children) {
-        this.children = children;
-    }
-
     private BTreeNode onChildExplode(BTreeNode exploded, String powder, BTreeNode leftChild, BTreeNode rightChild) {
         var explodedIndex = findChild(exploded);
         children.remove(explodedIndex);
@@ -303,6 +295,10 @@ class BTreeNode {
         rightChild.setParent(this);
         keys.add(explodedIndex, powder);
         return maybeExplode();
+    }
+
+    private void setChildren(ArrayList<BTreeNode> children) {
+        this.children = children;
     }
 
     private void setParent(BTreeNode parent) {
@@ -328,6 +324,7 @@ class BTreeNode {
                 return i;
             }
         }
+        assert false;
         return -1;
     }
 
@@ -338,6 +335,10 @@ class BTreeNode {
             }
         }
         return keys.size();
+    }
+
+    private boolean isLeaf() {
+        return this.children == null;
     }
 
     private BTreeNode parent;
