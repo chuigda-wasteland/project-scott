@@ -287,7 +287,7 @@ class BTreeNode {
     }
 
     private BTreeNode onChildExplode(BTreeNode exploded, String powder, BTreeNode leftChild, BTreeNode rightChild) {
-        var explodedIndex = findChild(exploded);
+        var explodedIndex = children.indexOf(exploded);
         children.remove(explodedIndex);
         children.add(explodedIndex, rightChild);
         children.add(explodedIndex, leftChild);
@@ -316,16 +316,6 @@ class BTreeNode {
 
     private void setRightSibling(BTreeNode rightSibling) {
         this.rightSibling = rightSibling;
-    }
-
-    private int findChild(BTreeNode child) {
-        for (int i = 0; i < children.size(); i++) {
-            if (children.get(i) == child) {
-                return i;
-            }
-        }
-        assert false;
-        return -1;
     }
 
     private int findInsertPoint(String key) {
