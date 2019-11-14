@@ -3,6 +3,7 @@ package tech.icey.ds;
 import tech.icey.basic.ListUtil;
 import tech.icey.basic.Pair;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -35,6 +36,8 @@ abstract class BPlusTreeNode {
     abstract protected BPlusTreeNode onChildExplode(BPlusTreeNode exploded, String powder,
                                                     BPlusTreeNode leftChild, BPlusTreeNode rightChild);
 
+    abstract void traverse(List<Pair<String, String>> outputKV);
+
     protected int degree;
     protected BPlusTreeNode parent, leftSibling, rightSibling;
 }
@@ -64,6 +67,11 @@ class BPlusTreeIntNode extends BPlusTreeNode {
         children.add(explodedIndex, leftChild);
         keys.add(explodedIndex, powder);
         return maybeExplode();
+    }
+
+    @Override
+    void traverse(List<Pair<String, String>> outputKV) {
+        this.children.get(0).traverse(outputKV);
     }
 
     private BPlusTreeNode maybeExplode() {
@@ -151,8 +159,35 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
         return null;
     }
 
+    @Override
+    void traverse(List<Pair<String, String>> outputKV) {
+        var it = this;
+        while (it != null) {
+            outputKV.addAll(it.kvPairs);
+            it = (BPlusTreeLeafNode)it.rightSibling;
+        }
+    }
+
     private List<Pair<String, String>> kvPairs;
 }
 
 public class BPlusTree {
+    private BPlusTreeNode rootNode;
+
+    public BPlusTree(int degree) {
+        this.rootNode = new BPlusTreeLeafNode(degree, null, null, null, new ArrayList<>());
+    }
+
+    public void insert(String key, String value) {
+        var newRoot = rootNode.insert(key, value);
+        if (newRoot != null) {
+            rootNode = newRoot;
+        }
+    }
+
+    public List<Pair<String, String>> traverse() {
+        var ret = new ArrayList<Pair<String, String>>();
+        rootNode.traverse(ret);
+        return ret;
+    }
 }

@@ -6,6 +6,12 @@ public class Pair<T1, T2> {
         this.second = second;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        var thatPair = (Pair<T1, T2>)o;
+        return thatPair.first.equals(this.first) && thatPair.second.equals(this.second);
+    }
+
     public T1 getFirst() { return this.first; }
 
     public T2 getSecond() { return this.second; }
