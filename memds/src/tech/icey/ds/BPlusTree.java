@@ -4,7 +4,6 @@ import tech.icey.basic.ListUtil;
 import tech.icey.basic.Pair;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 abstract class BPlusTreeNode {
@@ -35,11 +34,17 @@ abstract class BPlusTreeNode {
     abstract BPlusTreeNode insert(String key, String value);
     abstract protected BPlusTreeNode onChildExplode(BPlusTreeNode exploded, String powder,
                                                     BPlusTreeNode leftChild, BPlusTreeNode rightChild);
+    abstract Pair<Boolean, BPlusTreeNode> delete(String key);
+    abstract protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
+                                                       BPlusTreeNode newChild);
+    abstract protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2);
 
     abstract void traverse(List<Pair<String, String>> outputKV);
 
     protected int degree;
     protected BPlusTreeNode parent, leftSibling, rightSibling;
+
+    protected enum WhichSibling { LeftSibling, RightSibling }
 }
 
 class BPlusTreeIntNode extends BPlusTreeNode {
@@ -67,6 +72,21 @@ class BPlusTreeIntNode extends BPlusTreeNode {
         children.add(explodedIndex, leftChild);
         keys.add(explodedIndex, powder);
         return maybeExplode();
+    }
+
+    @Override
+    Pair<Boolean, BPlusTreeNode> delete(String key) {
+        return null;
+    }
+
+    @Override
+    protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2, BPlusTreeNode newChild) {
+        return null;
+    }
+
+    @Override
+    protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2) {
+        return null;
     }
 
     @Override
@@ -155,6 +175,59 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     @Override
     protected BPlusTreeNode onChildExplode(BPlusTreeNode exploded, String powder,
                                            BPlusTreeNode leftChild, BPlusTreeNode rightChild) {
+        assert false;
+        return null;
+    }
+
+    @Override
+    Pair<Boolean, BPlusTreeNode> delete(String key) {
+        var index = getDeletionIndex(key);
+        if (index == -1) {
+            return new Pair<>(false, null);
+        }
+        kvPairs.remove(index);
+        return new Pair<>(true, maybeShrink());
+    }
+
+    private BPlusTreeNode maybeShrink() {
+        if (this.kvPairs.size() * 2 < degree) {
+            var siblingP = chooseSibling();
+            var sibling = siblingP.getFirst();
+            var whichSibling = siblingP.getSecond();
+        }
+    }
+
+    private Pair<BPlusTreeLeafNode, WhichSibling> chooseSibling() {
+        var leftSibling = (BPlusTreeLeafNode)this.leftSibling;
+        var rightSibling = (BPlusTreeLeafNode)this.rightSibling;
+        if (leftSibling == null || leftSibling.parent != this.parent) {
+            return new Pair<>(leftSibling, WhichSibling.LeftSibling);
+        } else if (rightSibling == null || rightSibling.parent != this.parent){
+            return new Pair<>(rightSibling, WhichSibling.RightSibling);
+        } else {
+            return leftSibling.kvPairs.size() > rightSibling.kvPairs.size()
+                    ? new Pair<>(leftSibling, WhichSibling.LeftSibling)
+                    : new Pair<>(rightSibling, WhichSibling.RightSibling);
+        }
+    }
+
+    private int getDeletionIndex(String key) {
+        for (var i = 0; i < kvPairs.size(); i++) {
+            if (kvPairs.get(i).getFirst().equals(key)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2, BPlusTreeNode newChild) {
+        assert false;
+        return null;
+    }
+
+    @Override
+    protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2) {
         assert false;
         return null;
     }
