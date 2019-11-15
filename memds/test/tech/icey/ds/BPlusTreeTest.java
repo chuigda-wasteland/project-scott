@@ -9,13 +9,13 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BPlusTreeTest {
-    List<String> getFixedKeySequence() {
+    static List<String> getFixedKeySequence() {
         return List.of("17", "1", "15", "2", "12", "16", "19",
                 "18", "5", "6", "13", "14", "8", "7", "11",
                 "3", "9", "4", "20", "10");
     }
 
-    List<String> getFixedValueSequence() {
+    static List<String> getFixedValueSequence() {
         return List.of("心中想的就是她", "任凭梦里三千落花", "走遍天涯心随你起落", "看惯了长风", "吹动你英勇的头发",
                        "我心中想得还是她", "哭也欢乐", "悲也潇洒", "只是我的心一直在问", "用什么",
                        "把你永久留下", "莫笑旧衣衫旧长剑走过天涯", "且看风为屏草为席天地为家",
@@ -23,7 +23,7 @@ public class BPlusTreeTest {
                        "年少风雅鲜衣怒马也不过一刹那", "难免疏漏儿时檐下莫测变化", "隔却山海", "转身从容煎茶");
     }
 
-    List<String> getFixedDeletionSequence() {
+    static List<String> getFixedDeletionSequence() {
         return List.of("17", "15", "16", "19", "18", "5", "6", "13",
                 "14", "8", "7", "11", "3", "9", "4", "20", "10",
                 "1", "2", "12");
@@ -48,8 +48,8 @@ public class BPlusTreeTest {
             var valueSequence = getFixedValueSequence();
 
             for (var j = 0; j < 20; j++) {
-                bplustree.insert(keySequence.get(i), valueSequence.get(i));
-                map.put(keySequence.get(i), valueSequence.get(i));
+                bplustree.insert(keySequence.get(j), valueSequence.get(j));
+                map.put(keySequence.get(j), valueSequence.get(j));
                 Assertions.assertArrayEquals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());
             }
         }

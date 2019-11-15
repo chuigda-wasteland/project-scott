@@ -51,6 +51,8 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     BPlusTreeIntNode(int degree, BPlusTreeNode parent, BPlusTreeNode leftSibling, BPlusTreeNode rightSibling,
                      List<String> keys, List<BPlusTreeNode> children) {
         super(degree, parent, leftSibling, rightSibling);
+        this.keys = keys;
+        this.children = children;
     }
 
     @Override
@@ -106,6 +108,16 @@ class BPlusTreeIntNode extends BPlusTreeNode {
                                      null, leftKeys, leftChildren);
             var rightNode = new BPlusTreeIntNode(degree, this.parent, null,
                                                  this.rightSibling, rightKeys, rightChildren);
+            leftNode.setRightSibling(rightNode);
+            rightNode.setLeftSibling(leftNode);
+
+            if (leftSibling != null) {
+                leftSibling.rightSibling = leftNode;
+            }
+            if (rightSibling != null) {
+                rightSibling.leftSibling = rightNode;
+            }
+
             for (var child : leftChildren) {
                 child.setParent(leftNode);
             }
@@ -166,7 +178,23 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
             leftNode.setRightSibling(rightNode);
             rightNode.setLeftSibling(leftNode);
 
-            return parent.onChildExplode(this, powder.getFirst(), leftNode, rightNode);
+            if (leftSibling != null) {
+                leftSibling.rightSibling = leftNode;
+            }
+            if (rightSibling != null) {
+                rightSibling.leftSibling = rightNode;
+            }
+
+            if (parent == null) {
+                var newRoot = new BPlusTreeIntNode(degree, null, null, null,
+                                                ListUtil.copy(List.of(powder.getFirst())),
+                                                ListUtil.copy(List.of(leftNode, rightNode)));
+                leftNode.parent = newRoot;
+                rightNode.parent = newRoot;
+                return newRoot;
+            } else {
+                return parent.onChildExplode(this, powder.getFirst(), leftNode, rightNode);
+            }
         } else {
             return null;
         }
@@ -195,6 +223,8 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
             var sibling = siblingP.getFirst();
             var whichSibling = siblingP.getSecond();
         }
+        /// TODO implement this
+        return null;
     }
 
     private Pair<BPlusTreeLeafNode, WhichSibling> chooseSibling() {
