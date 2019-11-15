@@ -29,7 +29,7 @@ public class BPlusTreeTest {
                 "1", "2", "12");
     }
 
-    List<String> getRandomSequence() {
+    static List<String> getRandomKeySequence() {
         var ret = new ArrayList<String>();
         for (var i = 1; i < 1000; i++) {
             ret.add(Integer.toString(i));
@@ -38,20 +38,59 @@ public class BPlusTreeTest {
         return ret;
     }
 
+    static List<String> getRandomValueSequence() {
+        var ret = new ArrayList<String>();
+        var rand1 = getRandomKeySequence();
+        var rand2 = getRandomKeySequence();
+        for (int i = 0; i < rand1.size(); i++) {
+            ret.add(rand1.get(i) + rand2.get(i));
+        }
+        return ret;
+    }
+
     @Test
     void happyTestDegree3() {
-        for (var i = 0; i < 10; i++) {
-            var bplustree = new BPlusTree(3);
-            var map = new TreeMap<String, String>();
+        // 测试肯定过不了
+        var bplustree = new BPlusTree(3);
+        var map = new TreeMap<String, String>();
 
-            var keySequence = getFixedKeySequence();
-            var valueSequence = getFixedValueSequence();
+        var keySequence = getFixedKeySequence();
+        var valueSequence = getFixedValueSequence();
 
-            for (var j = 0; j < 20; j++) {
-                bplustree.insert(keySequence.get(j), valueSequence.get(j));
-                map.put(keySequence.get(j), valueSequence.get(j));
-                Assertions.assertArrayEquals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());
-            }
+        for (var j = 0; j < 20; j++) {
+            bplustree.insert(keySequence.get(j), valueSequence.get(j));
+            map.put(keySequence.get(j), valueSequence.get(j));
+            Assertions.assertArrayEquals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());
+        }
+
+        var deletionSequence = getFixedDeletionSequence();
+        for (var j = 0; j < 20; j++) {
+            var bplusDeleted = bplustree.delete(deletionSequence.get(j));
+            var mapDeleted = map.remove(deletionSequence.get(j)) != null;
+            Assertions.assertEquals(mapDeleted, bplusDeleted);
+            Assertions.assertArrayEquals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());
+        }
+    }
+
+    public static void main(String[] args) {
+        var bplustree = new BPlusTree(3);
+        var map = new TreeMap<String, String>();
+
+        var keySequence = getFixedKeySequence();
+        var valueSequence = getFixedValueSequence();
+
+        for (var j = 0; j < 20; j++) {
+            bplustree.insert(keySequence.get(j), valueSequence.get(j));
+            map.put(keySequence.get(j), valueSequence.get(j));
+            Assertions.assertArrayEquals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());
+        }
+
+        var deletionSequence = getFixedDeletionSequence();
+        for (var j = 0; j < 20; j++) {
+            var bplusDeleted = bplustree.delete(deletionSequence.get(j));
+            var mapDeleted = map.remove(deletionSequence.get(j)) != null;
+            assert mapDeleted == bplusDeleted;
+            assert Arrays.equals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());
         }
     }
 }

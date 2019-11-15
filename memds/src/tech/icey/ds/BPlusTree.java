@@ -44,6 +44,8 @@ abstract class BPlusTreeNode {
     protected int degree;
     protected BPlusTreeNode parent, leftSibling, rightSibling;
 
+    protected abstract void onChildrenRebalance(int separatorIndex, String newSeparator);
+
     protected enum WhichSibling { LeftSibling, RightSibling }
 }
 
@@ -78,7 +80,12 @@ class BPlusTreeIntNode extends BPlusTreeNode {
 
     @Override
     Pair<Boolean, BPlusTreeNode> delete(String key) {
-        return null;
+        for (var i = 0; i < this.keys.size(); i++) {
+            if (keys.get(i).compareTo(key) > 0) {
+                return children.get(i).delete(key);
+            }
+        }
+        return children.get(children.size() - 1).delete(key);
     }
 
     @Override
@@ -88,22 +95,41 @@ class BPlusTreeIntNode extends BPlusTreeNode {
         this.children.remove(child2);
         this.children.add(separatorIndex, newChild);
         this.keys.remove(separatorIndex);
-        return maybeShrink();
+
+        if (this.parent == null && this.keys.size() == 0) {
+            return this.children.get(0);
+        } else {
+            return maybeShrink();
+        }
     }
 
     private BPlusTreeNode maybeShrink() {
-        if (this.keys.size() * 2 < degree) {
+        if (this.keys.size() == 0) {
             var siblingP = chooseSibling();
             var sibling = siblingP.getFirst();
             var whichSibling = siblingP.getSecond();
-            var separatorP = getSeparator(this, sibling);
+            var separatorP = parent.getSeparator(this, sibling);
             var separator = separatorP.getFirst();
             var separatorIndex = separatorP.getSecond();
             var allKeys = new ArrayList<String>();
             var allChildren = new ArrayList<BPlusTreeNode>();
 
+            if (whichSibling == WhichSibling.LeftSibling) {
+                allKeys.addAll(sibling.keys);
+                allKeys.add(separator);
+                allKeys.addAll(keys);
+                allChildren.addAll(sibling.children);
+                allChildren.addAll(this.children);
+            } else {
+                allKeys.addAll(keys);
+                allKeys.add(separator);
+                allKeys.addAll(sibling.keys);
+                allChildren.addAll(this.children);
+                allChildren.addAll(sibling.children);
+            }
+
             if (allKeys.size() < degree) {
-                BPlusTreeNode newNodeLeftSibling = null, newNodeRightSibling = null;
+                BPlusTreeNode newNodeLeftSibling, newNodeRightSibling;
                 if (whichSibling == WhichSibling.LeftSibling) {
                     newNodeLeftSibling = sibling.leftSibling;
                     newNodeRightSibling = this.rightSibling;
@@ -112,11 +138,16 @@ class BPlusTreeIntNode extends BPlusTreeNode {
                     newNodeRightSibling = sibling.rightSibling;
                 }
                 var newNode = new BPlusTreeIntNode(degree, this.parent, newNodeLeftSibling,
-                                                   newNodeRightSibling, allKeys, allChildren);
-                newNodeLeftSibling.setRightSibling(newNode);
-                newNodeRightSibling.setLeftSibling(newNode);
+                        newNodeRightSibling, allKeys, allChildren);
+                if (newNodeLeftSibling != null) {
+                    newNodeLeftSibling.setRightSibling(newNode);
+                }
+                if (newNodeRightSibling != null) {
+                    newNodeRightSibling.setLeftSibling(newNode);
+                }
                 return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
             } else {
+                /// TODO 等会再写，主播买饮料去了
                 return null;
             }
         } else {
@@ -150,6 +181,11 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     @Override
     void traverse(List<Pair<String, String>> outputKV) {
         this.children.get(0).traverse(outputKV);
+    }
+
+    @Override
+    protected void onChildrenRebalance(int separatorIndex, String newSeparator) {
+        this.keys.set(separatorIndex, newSeparator);
     }
 
     private BPlusTreeNode maybeExplode() {
@@ -278,9 +314,9 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
             return null;
         }
 
-        if (this.kvPairs.size() * 2 < degree) {
+        if (this.kvPairs.size() == 0) {
             var siblingP = chooseSibling();
-            var sibling = (BPlusTreeLeafNode) siblingP.getFirst();
+            var sibling = siblingP.getFirst();
             var whichSibling = siblingP.getSecond();
             var separatorP = parent.getSeparator(this, sibling);
             var separatorIndex = separatorP.getSecond();
@@ -294,7 +330,7 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
             }
 
             if (allKVPairs.size() < degree) {
-                BPlusTreeNode newNodeLeftSibling = null, newNodeRightSibling = null;
+                BPlusTreeNode newNodeLeftSibling, newNodeRightSibling;
                 if (whichSibling == WhichSibling.LeftSibling) {
                     newNodeLeftSibling = sibling.leftSibling;
                     newNodeRightSibling = this.rightSibling;
@@ -303,11 +339,19 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                     newNodeRightSibling = sibling.rightSibling;
                 }
                 var newNode = new BPlusTreeLeafNode(degree, this.parent, newNodeLeftSibling,
-                                                    newNodeRightSibling, allKVPairs);
-                newNodeLeftSibling.setRightSibling(newNode);
-                newNodeRightSibling.setLeftSibling(newNode);
+                        newNodeRightSibling, allKVPairs);
+                if (newNodeLeftSibling != null) {
+                    newNodeLeftSibling.setRightSibling(newNode);
+                }
+                if (newNodeRightSibling != null) {
+                    newNodeRightSibling.setLeftSibling(newNode);
+                }
                 return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
             } else {
+                var leftKVPairs = ListUtil.copy(allKVPairs.subList(0, allKVPairs.size() / 2));
+                var rightKVPairs = ListUtil.copy(allKVPairs.subList(allKVPairs.size() / 2, allKVPairs.size()));
+                var newSeparator = allKVPairs.get(allKVPairs.size() / 2).getFirst();
+                parent.onChildrenRebalance(separatorIndex, newSeparator);
                 return null;
             }
         }
@@ -318,9 +362,9 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
         var leftSibling = (BPlusTreeLeafNode)this.leftSibling;
         var rightSibling = (BPlusTreeLeafNode)this.rightSibling;
         if (leftSibling == null || leftSibling.parent != this.parent) {
-            return new Pair<>(leftSibling, WhichSibling.LeftSibling);
-        } else if (rightSibling == null || rightSibling.parent != this.parent){
             return new Pair<>(rightSibling, WhichSibling.RightSibling);
+        } else if (rightSibling == null || rightSibling.parent != this.parent){
+            return new Pair<>(leftSibling, WhichSibling.LeftSibling);
         } else {
             return leftSibling.kvPairs.size() > rightSibling.kvPairs.size()
                     ? new Pair<>(leftSibling, WhichSibling.LeftSibling)
@@ -359,6 +403,11 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
         }
     }
 
+    @Override
+    protected void onChildrenRebalance(int separatorIndex, String newSeparator) {
+        assert false;
+    }
+
     private List<Pair<String, String>> kvPairs;
 }
 
@@ -374,6 +423,14 @@ public class BPlusTree {
         if (newRoot != null) {
             rootNode = newRoot;
         }
+    }
+
+    public boolean delete(String key) {
+        var deleteResult = rootNode.delete(key);
+        if (deleteResult.getSecond() != null) {
+            rootNode = deleteResult.getSecond();
+        }
+        return deleteResult.getFirst();
     }
 
     public List<Pair<String, String>> traverse() {
