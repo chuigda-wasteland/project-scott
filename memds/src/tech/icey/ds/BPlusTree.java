@@ -37,7 +37,7 @@ abstract class BPlusTreeNode {
     abstract Pair<Boolean, BPlusTreeNode> delete(String key);
     abstract protected BPlusTreeNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
                                                    int separatorIndex, BPlusTreeNode newChild);
-    abstract protected int getSeparatorIndex(BPlusTreeNode child1, BPlusTreeNode child2);
+    abstract protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2);
 
     abstract void traverse(List<Pair<String, String>> outputKV);
 
@@ -96,12 +96,31 @@ class BPlusTreeIntNode extends BPlusTreeNode {
             var siblingP = chooseSibling();
             var sibling = siblingP.getFirst();
             var whichSibling = siblingP.getSecond();
+            var separatorP = getSeparator(this, sibling);
+            var separator = separatorP.getFirst();
+            var separatorIndex = separatorP.getSecond();
             var allKeys = new ArrayList<String>();
             var allChildren = new ArrayList<BPlusTreeNode>();
 
             if (allKeys.size() < degree) {
-
+                BPlusTreeNode newNodeLeftSibling = null, newNodeRightSibling = null;
+                if (whichSibling == WhichSibling.LeftSibling) {
+                    newNodeLeftSibling = sibling.leftSibling;
+                    newNodeRightSibling = this.rightSibling;
+                } else {
+                    newNodeLeftSibling = this.leftSibling;
+                    newNodeRightSibling = sibling.rightSibling;
+                }
+                var newNode = new BPlusTreeIntNode(degree, this.parent, newNodeLeftSibling,
+                                                   newNodeRightSibling, allKeys, allChildren);
+                newNodeLeftSibling.setRightSibling(newNode);
+                newNodeRightSibling.setLeftSibling(newNode);
+                return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
+            } else {
+                return null;
             }
+        } else {
+            return null;
         }
     }
 
@@ -120,13 +139,12 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     }
 
     @Override
-    protected int getSeparatorIndex(BPlusTreeNode child1, BPlusTreeNode child2) {
+    protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2) {
         var ret = this.children.indexOf(child1);
-        if (child1.rightSibling == child2) {
-            return ret;
-        } else {
-            return ret - 1;
+        if (child1.leftSibling == child2) {
+            ret -= 1;
         }
+        return new Pair<>(keys.get(ret), ret);
     }
 
     @Override
@@ -264,7 +282,8 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
             var siblingP = chooseSibling();
             var sibling = (BPlusTreeLeafNode) siblingP.getFirst();
             var whichSibling = siblingP.getSecond();
-            var separatorIndex = parent.getSeparatorIndex(this, sibling);
+            var separatorP = parent.getSeparator(this, sibling);
+            var separatorIndex = separatorP.getSecond();
             var allKVPairs = new ArrayList<Pair<String, String>>();
             if (whichSibling == WhichSibling.LeftSibling) {
                 allKVPairs.addAll(sibling.kvPairs);
@@ -283,7 +302,8 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                     newNodeLeftSibling = this.leftSibling;
                     newNodeRightSibling = sibling.rightSibling;
                 }
-                var newNode = new BPlusTreeLeafNode(degree, this.parent, newNodeLeftSibling, newNodeRightSibling, allKVPairs);
+                var newNode = new BPlusTreeLeafNode(degree, this.parent, newNodeLeftSibling,
+                                                    newNodeRightSibling, allKVPairs);
                 newNodeLeftSibling.setRightSibling(newNode);
                 newNodeRightSibling.setLeftSibling(newNode);
                 return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
@@ -325,9 +345,9 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     }
 
     @Override
-    protected int getSeparatorIndex(BPlusTreeNode child1, BPlusTreeNode child2) {
+    protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2) {
         assert false;
-        return -1;
+        return new Pair<>(null, -1);
     }
 
     @Override
