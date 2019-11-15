@@ -36,8 +36,8 @@ abstract class BPlusTreeNode {
                                                     BPlusTreeNode leftChild, BPlusTreeNode rightChild);
     abstract Pair<Boolean, BPlusTreeNode> delete(String key);
     abstract protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
-                                                       BPlusTreeNode newChild);
-    abstract protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2);
+                                                       int separatorIndex, BPlusTreeNode newChild);
+    abstract protected int getSeparatorIndex(BPlusTreeNode child1, BPlusTreeNode child2);
 
     abstract void traverse(List<Pair<String, String>> outputKV);
 
@@ -82,13 +82,19 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     }
 
     @Override
-    protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2, BPlusTreeNode newChild) {
+    protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
+                                              int separatorIndex, BPlusTreeNode newChild) {
         return null;
     }
 
     @Override
-    protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2) {
-        return null;
+    protected int getSeparatorIndex(BPlusTreeNode child1, BPlusTreeNode child2) {
+        var ret = this.children.indexOf(child1);
+        if (child1.rightSibling == child2) {
+            return ret;
+        } else {
+            return ret - 1;
+        }
     }
 
     @Override
@@ -220,10 +226,35 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     private BPlusTreeNode maybeShrink() {
         if (this.kvPairs.size() * 2 < degree) {
             var siblingP = chooseSibling();
-            var sibling = siblingP.getFirst();
+            var sibling = (BPlusTreeLeafNode) siblingP.getFirst();
             var whichSibling = siblingP.getSecond();
+            var separatorIndex = getSeparatorIndex(this, sibling);
+            var allKVPairs = new ArrayList<Pair<String, String>>();
+            if (whichSibling == WhichSibling.LeftSibling) {
+                allKVPairs.addAll(sibling.kvPairs);
+                allKVPairs.addAll(this.kvPairs);
+            } else {
+                allKVPairs.addAll(this.kvPairs);
+                allKVPairs.addAll(sibling.kvPairs);
+            }
+
+            if (allKVPairs.size() < degree) {
+                BPlusTreeNode newNodeLeftSibling = null, newNodeRightSibling = null;
+                if (whichSibling == WhichSibling.LeftSibling) {
+                    newNodeLeftSibling = sibling.leftSibling;
+                    newNodeRightSibling = this.rightSibling;
+                } else {
+                    newNodeLeftSibling = this.leftSibling;
+                    newNodeRightSibling = sibling.rightSibling;
+                }
+                var newNode = new BPlusTreeLeafNode(degree, this.parent, newNodeLeftSibling, newNodeRightSibling, allKVPairs);
+                newNodeLeftSibling.setRightSibling(newNode);
+                newNodeRightSibling.setLeftSibling(newNode);
+                return onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
+            } else {
+                return null;
+            }
         }
-        /// TODO implement this
         return null;
     }
 
@@ -251,15 +282,16 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     }
 
     @Override
-    protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2, BPlusTreeNode newChild) {
+    protected BPlusTreeLeafNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
+                                              int separatorIndex, BPlusTreeNode newChild) {
         assert false;
         return null;
     }
 
     @Override
-    protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2) {
+    protected int getSeparatorIndex(BPlusTreeNode child1, BPlusTreeNode child2) {
         assert false;
-        return null;
+        return -1;
     }
 
     @Override
