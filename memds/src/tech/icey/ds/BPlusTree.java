@@ -155,7 +155,7 @@ class BPlusTreeIntNode extends BPlusTreeNode {
                     newNodeRightSibling = sibling.rightSibling;
                 }
                 var newNode = new BPlusTreeIntNode(degree, this.parent, newNodeLeftSibling,
-                        newNodeRightSibling, allKeys, allChildren);
+                                                   newNodeRightSibling, allKeys, allChildren);
                 if (newNodeLeftSibling != null) {
                     newNodeLeftSibling.setRightSibling(newNode);
                 }
@@ -229,6 +229,9 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     @Override
     String buildDescriptor() {
         var builder = new StringBuilder("[I]");
+        if (this.keys.isEmpty()) {
+            return builder.toString();
+        }
         for (var i = 0; i < this.keys.size() - 1; i++) {
             builder.append(this.keys.get(i));
             builder.append(',');
@@ -398,7 +401,7 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                     newNodeRightSibling = sibling.rightSibling;
                 }
                 var newNode = new BPlusTreeLeafNode(degree, this.parent, newNodeLeftSibling,
-                        newNodeRightSibling, allKVPairs);
+                                                    newNodeRightSibling, allKVPairs);
                 if (newNodeLeftSibling != null) {
                     newNodeLeftSibling.setRightSibling(newNode);
                 }
@@ -472,6 +475,9 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     @Override
     String buildDescriptor() {
         var builder = new StringBuilder("[V]");
+        if (this.kvPairs.isEmpty()) {
+            return builder.toString();
+        }
         for (var i = 0; i < this.kvPairs.size() - 1; i++) {
             builder.append(this.kvPairs.get(i).getFirst());
             builder.append(',');
