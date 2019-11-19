@@ -147,7 +147,33 @@ class BPlusTreeIntNode extends BPlusTreeNode {
                 }
                 return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
             } else {
-                /// TODO 等会再写，主播买饮料去了
+                var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
+                var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2 + 1, allKeys.size()));
+                var newSeparator = allKeys.get(allKeys.size() / 2);
+                var leftChildren = ListUtil.copy(allChildren.subList(0, (allChildren.size() + 1) / 2));
+                var rightChildren = ListUtil.copy(allChildren.subList((allChildren.size() + 1) / 2, allChildren.size()));
+
+                if (whichSibling == WhichSibling.LeftSibling) {
+                    sibling.keys = leftKeys;
+                    sibling.children = leftChildren;
+                    this.keys = rightKeys;
+                    this.children = rightChildren;
+                } else {
+                    this.keys = leftKeys;
+                    this.children = leftChildren;
+                    sibling.keys = rightKeys;
+                    sibling.children = rightChildren;
+                }
+
+                for (var child : this.children) {
+                    child.setParent(this);
+                }
+                for (var child : sibling.children) {
+                    child.setParent(sibling);
+                }
+
+                var parent = (BPlusTreeIntNode)this.parent;
+                parent.keys.set(separatorIndex, newSeparator);
                 return null;
             }
         } else {
