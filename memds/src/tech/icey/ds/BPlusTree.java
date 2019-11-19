@@ -2,6 +2,8 @@ package tech.icey.ds;
 
 import tech.icey.basic.ListUtil;
 import tech.icey.basic.Pair;
+import tech.icey.util.DirectedGraph;
+import tech.icey.util.Graphvizible;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +33,8 @@ abstract class BPlusTreeNode {
         this.rightSibling = rightSibling;
     }
 
+    abstract void buildUpDirectedGraph(DirectedGraph d);
+
     abstract BPlusTreeNode insert(String key, String value);
     abstract protected BPlusTreeNode onChildExplode(BPlusTreeNode exploded, String powder,
                                                     BPlusTreeNode leftChild, BPlusTreeNode rightChild);
@@ -41,10 +45,12 @@ abstract class BPlusTreeNode {
 
     abstract void traverse(List<Pair<String, String>> outputKV);
 
+    abstract String buildDescriptor();
+
     protected int degree;
     protected BPlusTreeNode parent, leftSibling, rightSibling;
 
-    protected abstract void onChildrenRebalance(int separatorIndex, String newSeparator);
+    protected abstract void onChildrenReBalance(int separatorIndex, String newSeparator);
 
     protected enum WhichSibling { LeftSibling, RightSibling }
 }
@@ -55,6 +61,17 @@ class BPlusTreeIntNode extends BPlusTreeNode {
         super(degree, parent, leftSibling, rightSibling);
         this.keys = keys;
         this.children = children;
+    }
+
+    @Override
+    void buildUpDirectedGraph(DirectedGraph d) {
+        var selfDescriptor = buildDescriptor();
+        for (var child : children) {
+            d.addEdge(selfDescriptor, child.buildDescriptor());
+        }
+        for (var child : children) {
+            child.buildUpDirectedGraph(d);
+        }
     }
 
     @Override
@@ -145,7 +162,7 @@ class BPlusTreeIntNode extends BPlusTreeNode {
                 if (newNodeRightSibling != null) {
                     newNodeRightSibling.setLeftSibling(newNode);
                 }
-                return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
+                return parent.onChildShrink(this, sibling, separatorIndex, newNode);
             } else {
                 var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
                 var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2 + 1, allKeys.size()));
@@ -210,7 +227,18 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     }
 
     @Override
-    protected void onChildrenRebalance(int separatorIndex, String newSeparator) {
+    String buildDescriptor() {
+        var builder = new StringBuilder("[I]");
+        for (var i = 0; i < this.keys.size() - 1; i++) {
+            builder.append(this.keys.get(i));
+            builder.append(',');
+        }
+        builder.append(this.keys.get(this.keys.size() - 1));
+        return builder.toString();
+    }
+
+    @Override
+    protected void onChildrenReBalance(int separatorIndex, String newSeparator) {
         this.keys.set(separatorIndex, newSeparator);
     }
 
@@ -268,6 +296,11 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                       List<Pair<String, String>> kvPairs) {
         super(degree, parent, leftSibling, rightSibling);
         this.kvPairs = kvPairs;
+    }
+
+    @Override
+    void buildUpDirectedGraph(DirectedGraph d) {
+        // do nothing
     }
 
     @Override
@@ -372,12 +405,19 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                 if (newNodeRightSibling != null) {
                     newNodeRightSibling.setLeftSibling(newNode);
                 }
-                return parent.onChildShrink(newNodeLeftSibling, newNodeRightSibling, separatorIndex, newNode);
+                return parent.onChildShrink(this, sibling, separatorIndex, newNode);
             } else {
                 var leftKVPairs = ListUtil.copy(allKVPairs.subList(0, allKVPairs.size() / 2));
                 var rightKVPairs = ListUtil.copy(allKVPairs.subList(allKVPairs.size() / 2, allKVPairs.size()));
                 var newSeparator = allKVPairs.get(allKVPairs.size() / 2).getFirst();
-                parent.onChildrenRebalance(separatorIndex, newSeparator);
+                if (whichSibling == WhichSibling.LeftSibling) {
+                    sibling.kvPairs = leftKVPairs;
+                    this.kvPairs = rightKVPairs;
+                } else {
+                    this.kvPairs = leftKVPairs;
+                    sibling.kvPairs = rightKVPairs;
+                }
+                parent.onChildrenReBalance(separatorIndex, newSeparator);
                 return null;
             }
         }
@@ -430,14 +470,25 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     }
 
     @Override
-    protected void onChildrenRebalance(int separatorIndex, String newSeparator) {
+    String buildDescriptor() {
+        var builder = new StringBuilder("[V]");
+        for (var i = 0; i < this.kvPairs.size() - 1; i++) {
+            builder.append(this.kvPairs.get(i).getFirst());
+            builder.append(',');
+        }
+        builder.append(this.kvPairs.get(this.kvPairs.size() - 1).getFirst());
+        return builder.toString();
+    }
+
+    @Override
+    protected void onChildrenReBalance(int separatorIndex, String newSeparator) {
         assert false;
     }
 
     private List<Pair<String, String>> kvPairs;
 }
 
-public class BPlusTree {
+public class BPlusTree implements Graphvizible  {
     private BPlusTreeNode rootNode;
 
     public BPlusTree(int degree) {
@@ -462,6 +513,13 @@ public class BPlusTree {
     public List<Pair<String, String>> traverse() {
         var ret = new ArrayList<Pair<String, String>>();
         rootNode.traverse(ret);
+        return ret;
+    }
+
+    @Override
+    public DirectedGraph toDirectedGraph() {
+        var ret = new DirectedGraph();
+        rootNode.buildUpDirectedGraph(ret);
         return ret;
     }
 }

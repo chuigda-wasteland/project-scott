@@ -6,13 +6,11 @@ import tech.icey.basic.ListUtil;
 
 import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 public class BPlusTreeTest {
     static List<String> getFixedKeySequence() {
         return List.of("17", "1", "15", "2", "12", "16", "19",
-                "18", "5", "6", "13", "14", "8", "7", "11",
-                "3", "9", "4", "20", "10");
+                       "18", "5", "6", "13", "14", "8", "7", "11",
+                       "3", "9", "4", "20", "10");
     }
 
     static List<String> getFixedValueSequence() {
@@ -25,8 +23,8 @@ public class BPlusTreeTest {
 
     static List<String> getFixedDeletionSequence() {
         return List.of("17", "15", "16", "19", "18", "5", "6", "13",
-                "14", "8", "7", "11", "3", "9", "4", "20", "10",
-                "1", "2", "12");
+                       "14", "8", "7", "11", "3", "9", "4", "20", "10",
+                       "1", "2", "12");
     }
 
     static List<String> getRandomKeySequence() {
@@ -87,6 +85,7 @@ public class BPlusTreeTest {
 
         var deletionSequence = getFixedDeletionSequence();
         for (var j = 0; j < 20; j++) {
+            System.err.println(bplustree.toDirectedGraph().toString());
             var bplusDeleted = bplustree.delete(deletionSequence.get(j));
             var mapDeleted = map.remove(deletionSequence.get(j)) != null;
             assert mapDeleted == bplusDeleted;
