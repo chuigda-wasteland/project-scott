@@ -123,6 +123,7 @@ class BPlusTreeIntNode extends BPlusTreeNode {
         this.keys.remove(separatorIndex);
 
         if (this.parent == null && this.keys.size() == 0) {
+            this.children.get(0).setParent(null);
             return this.children.get(0);
         } else {
             return maybeShrink();
