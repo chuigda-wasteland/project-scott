@@ -3,6 +3,7 @@ package tech.icey.ds;
 import tech.icey.basic.ListUtil;
 import tech.icey.basic.Pair;
 import tech.icey.util.DirectedGraph;
+import tech.icey.util.GlobalIdAllocator;
 import tech.icey.util.Graphvizible;
 
 import java.util.ArrayList;
@@ -14,15 +15,11 @@ abstract class BPlusTreeNode {
         this.parent = parent;
         this.leftSibling = leftSibling;
         this.rightSibling = rightSibling;
+        this.globalId = GlobalIdAllocator.getInstance().nextId();
     }
 
     void setParent(BPlusTreeNode parent) {
         this.parent = parent;
-    }
-
-    void setSiblings(BPlusTreeNode leftSibling, BPlusTreeNode rightSibling) {
-        this.leftSibling = leftSibling;
-        this.rightSibling = rightSibling;
     }
 
     void setLeftSibling(BPlusTreeNode leftSibling) {
@@ -50,6 +47,8 @@ abstract class BPlusTreeNode {
     protected int degree;
     protected BPlusTreeNode parent, leftSibling, rightSibling;
 
+    protected int globalId;
+
     protected abstract void onChildrenReBalance(int separatorIndex, String newSeparator);
 
     protected enum WhichSibling { LeftSibling, RightSibling }
@@ -71,6 +70,13 @@ class BPlusTreeIntNode extends BPlusTreeNode {
         }
         for (var child : children) {
             child.buildUpDirectedGraph(d);
+        }
+        if (leftSibling != null) {
+            d.addEdge(selfDescriptor, leftSibling.buildDescriptor());
+        }
+        if (rightSibling != null) {
+            d.addEdge(selfDescriptor, rightSibling.buildDescriptor());
+            d.addSameRankNodes(selfDescriptor, rightSibling.buildDescriptor());
         }
     }
 
@@ -228,13 +234,15 @@ class BPlusTreeIntNode extends BPlusTreeNode {
 
     @Override
     String buildDescriptor() {
-        var builder = new StringBuilder("[I]");
+        var builder = new StringBuilder("(");
+        builder.append(globalId);
+        builder.append(") ");
         if (this.keys.isEmpty()) {
             return builder.toString();
         }
         for (var i = 0; i < this.keys.size() - 1; i++) {
             builder.append(this.keys.get(i));
-            builder.append(',');
+            builder.append(", ");
         }
         builder.append(this.keys.get(this.keys.size() - 1));
         return builder.toString();
@@ -303,7 +311,14 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
 
     @Override
     void buildUpDirectedGraph(DirectedGraph d) {
-        // do nothing
+        var selfDescriptor = buildDescriptor();
+        if (this.leftSibling != null) {
+            d.addEdge(selfDescriptor, leftSibling.buildDescriptor());
+        }
+        if (this.rightSibling != null) {
+            d.addEdge(selfDescriptor, rightSibling.buildDescriptor());
+            d.addSameRankNodes(selfDescriptor, rightSibling.buildDescriptor());
+        }
     }
 
     @Override
@@ -474,13 +489,15 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
 
     @Override
     String buildDescriptor() {
-        var builder = new StringBuilder("[V]");
+        var builder = new StringBuilder("(");
+        builder.append(globalId);
+        builder.append(") ");
         if (this.kvPairs.isEmpty()) {
             return builder.toString();
         }
         for (var i = 0; i < this.kvPairs.size() - 1; i++) {
             builder.append(this.kvPairs.get(i).getFirst());
-            builder.append(',');
+            builder.append(", ");
         }
         builder.append(this.kvPairs.get(this.kvPairs.size() - 1).getFirst());
         return builder.toString();
