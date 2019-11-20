@@ -78,6 +78,7 @@ public class BPlusTreeTest {
         var valueSequence = getFixedValueSequence();
 
         for (var j = 0; j < 20; j++) {
+            System.err.println(bplustree.toDirectedGraph().toString());
             bplustree.insert(keySequence.get(j), valueSequence.get(j));
             map.put(keySequence.get(j), valueSequence.get(j));
             Assertions.assertArrayEquals(ListUtil.flatten(map).toArray(), bplustree.traverse().toArray());

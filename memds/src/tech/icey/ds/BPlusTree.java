@@ -36,8 +36,8 @@ abstract class BPlusTreeNode {
     abstract protected BPlusTreeNode onChildExplode(BPlusTreeNode exploded, String powder,
                                                     BPlusTreeNode leftChild, BPlusTreeNode rightChild);
     abstract Pair<Boolean, BPlusTreeNode> delete(String key);
-    abstract protected BPlusTreeNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
-                                                   int separatorIndex, BPlusTreeNode newChild);
+    abstract protected BPlusTreeNode onChildrenShrink(BPlusTreeNode child1, BPlusTreeNode child2,
+                                                      int separatorIndex, BPlusTreeNode newChild);
     abstract protected Pair<String, Integer> getSeparator(BPlusTreeNode child1, BPlusTreeNode child2);
 
     abstract void traverse(List<Pair<String, String>> outputKV);
@@ -65,6 +65,9 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     @Override
     void buildUpDirectedGraph(DirectedGraph d) {
         var selfDescriptor = buildDescriptor();
+        if (parent != null) {
+            d.addEdge(selfDescriptor, parent.buildDescriptor());
+        }
         for (var child : children) {
             d.addEdge(selfDescriptor, child.buildDescriptor());
         }
@@ -112,8 +115,8 @@ class BPlusTreeIntNode extends BPlusTreeNode {
     }
 
     @Override
-    protected BPlusTreeNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
-                                          int separatorIndex, BPlusTreeNode newChild) {
+    protected BPlusTreeNode onChildrenShrink(BPlusTreeNode child1, BPlusTreeNode child2,
+                                             int separatorIndex, BPlusTreeNode newChild) {
         this.children.remove(child1);
         this.children.remove(child2);
         this.children.add(separatorIndex, newChild);
@@ -162,13 +165,16 @@ class BPlusTreeIntNode extends BPlusTreeNode {
                 }
                 var newNode = new BPlusTreeIntNode(degree, this.parent, newNodeLeftSibling,
                                                    newNodeRightSibling, allKeys, allChildren);
+                for (var child : allChildren) {
+                    child.setParent(newNode);
+                }
                 if (newNodeLeftSibling != null) {
                     newNodeLeftSibling.setRightSibling(newNode);
                 }
                 if (newNodeRightSibling != null) {
                     newNodeRightSibling.setLeftSibling(newNode);
                 }
-                return parent.onChildShrink(this, sibling, separatorIndex, newNode);
+                return parent.onChildrenShrink(this, sibling, separatorIndex, newNode);
             } else {
                 var leftKeys = ListUtil.copy(allKeys.subList(0, allKeys.size() / 2));
                 var rightKeys = ListUtil.copy(allKeys.subList(allKeys.size() / 2 + 1, allKeys.size()));
@@ -312,6 +318,9 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     @Override
     void buildUpDirectedGraph(DirectedGraph d) {
         var selfDescriptor = buildDescriptor();
+        if (parent != null) {
+            d.addEdge(selfDescriptor, parent.buildDescriptor());
+        }
         if (this.leftSibling != null) {
             d.addEdge(selfDescriptor, leftSibling.buildDescriptor());
         }
@@ -423,7 +432,7 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                 if (newNodeRightSibling != null) {
                     newNodeRightSibling.setLeftSibling(newNode);
                 }
-                return parent.onChildShrink(this, sibling, separatorIndex, newNode);
+                return parent.onChildrenShrink(this, sibling, separatorIndex, newNode);
             } else {
                 var leftKVPairs = ListUtil.copy(allKVPairs.subList(0, allKVPairs.size() / 2));
                 var rightKVPairs = ListUtil.copy(allKVPairs.subList(allKVPairs.size() / 2, allKVPairs.size()));
@@ -466,8 +475,8 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
     }
 
     @Override
-    protected BPlusTreeNode onChildShrink(BPlusTreeNode child1, BPlusTreeNode child2,
-                                          int separatorIndex, BPlusTreeNode newChild) {
+    protected BPlusTreeNode onChildrenShrink(BPlusTreeNode child1, BPlusTreeNode child2,
+                                             int separatorIndex, BPlusTreeNode newChild) {
         assert false;
         return null;
     }
