@@ -155,8 +155,4 @@ public class BPlusTreeTest {
             }
         }
     }
-
-    public static void main(String[] args) {
-
-    }
 }
