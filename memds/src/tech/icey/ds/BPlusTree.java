@@ -339,6 +339,7 @@ class BPlusTreeLeafNode extends BPlusTreeNode {
                 kvPairs.add(i, new Pair<>(key, value));
                 return maybeExplode();
             } else if (compareResult == 0) {
+                kvPairs.set(i, new Pair<>(key, value));
                 return null;
             }
         }

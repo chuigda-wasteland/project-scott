@@ -12,6 +12,11 @@ public class Pair<T1, T2> {
         return thatPair.first.equals(this.first) && thatPair.second.equals(this.second);
     }
 
+    @Override
+    public String toString() {
+        return "Pair<" + first.toString() + ", " + second.toString() + ">";
+    }
+
     public T1 getFirst() { return this.first; }
 
     public T2 getSecond() { return this.second; }

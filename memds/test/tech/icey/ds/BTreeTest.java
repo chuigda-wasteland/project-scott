@@ -77,7 +77,7 @@ class BTreeTest {
     void mixInsertAndDelete(int degree) {
         var r = new Random();
         for (var i = 0; i < 10; i++) {
-            var btree = new BTree(3);
+            var btree = new BTree(degree);
             var set = new TreeSet<String>();
             for (var elem : getRandomSequence()) {
                 btree.insert(elem);
