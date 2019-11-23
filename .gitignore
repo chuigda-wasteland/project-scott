@@ -15,3 +15,8 @@ memds/.idea
 
 # Dependencies downloaded by IDEA
 memds/lib
+
+# QtCreator builds
+build-*/*
+CMakeLists.txt.user
+CMakeLists.txt.user*
