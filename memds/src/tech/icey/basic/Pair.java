@@ -8,8 +8,12 @@ public class Pair<T1, T2> {
 
     @Override
     public boolean equals(Object o) {
-        var thatPair = (Pair<T1, T2>)o;
-        return thatPair.first.equals(this.first) && thatPair.second.equals(this.second);
+        if (o.getClass() == this.getClass()) {
+            var thatPair = (Pair<T1, T2>) o;
+            return thatPair.first.equals(this.first) && thatPair.second.equals(this.second);
+        } else {
+            return false;
+        }
     }
 
     @Override
