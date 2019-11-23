@@ -29,6 +29,10 @@ static mdb_int_t *mdb_alloc();
 static void mdb_free(mdb_int_t *db);
 static uint32_t mdb_hash(const char *key);
 
+static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
+                                   mdb_ptr_t *nextptr, char *keybuf,
+                                   mdb_ptr_t *valptr, mdb_size_t *valsize);
+
 static char pathbuf[4096];
 
 mdb_status_t mdb_open(mdb_t *handle, const char *path) {
@@ -106,27 +110,59 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   char *key_buffer = (char*)malloc(db->options.key_size_max + 1);
   mdb_ptr_t value_ptr;
   mdb_size_t value_size;
-  if (fread(&next_ptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
-    return mdb_status(MDB_ERR_READ, "cannot read next ptr");
-  }
-  if (fread(&key_buffer, 1, db->options.key_size_max + 1, db->fp_index)
-      != db->options.key_size_max + 1) {
-    return mdb_status(MDB_ERR_READ, "cannot read key");
-  }
-  if (fread(&value_ptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
-    return mdb_status(MDB_ERR_READ, "cannot read value ptr");
-  }
-  if (fread(&value_size, MDB_DATALEN_SIZE, 1, db->fp_index)
-      != MDB_DATALEN_SIZE) {
-    return mdb_status(MDB_ERR_READ, "cannot read value length");
+
+  mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
+                                            &value_ptr, &value_size);
+  if (read_status.code != MDB_OK) {
+    return read_status;
   }
 
-  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+  while (strcpy(key_buffer, key) != 0 && next_ptr != 0) {
+    read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
+                                 &value_ptr, &value_size);
+    if (read_status.code != MDB_OK) {
+      return read_status;
+    }
+  }
+
+  if (next_ptr == 0) {
+    return mdb_status(MDB_NO_KEY, "Key not found");
+  }
+  if (bufsiz < value_size) {
+    return mdb_status(MDB_ERR_BUFSIZ, "value buffer size too small");
+  }
+  if (fseek(db->fp_data, value_ptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to value");
+  }
+  if (fread(buf, 1, value_size, db->fp_data) != value_size) {
+    return mdb_status(MDB_ERR_READ, "cannot read data");
+  }
+  return mdb_status(MDB_OK, NULL);
 }
 
 mdb_options_t mdb_get_options(mdb_t handle) {
   mdb_int_t *db = (mdb_int_t*)handle;
   return db->options;
+}
+
+static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
+                                   mdb_ptr_t *nextptr, char *keybuf,
+                                   mdb_ptr_t *valptr, mdb_size_t *valsize) {
+  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read next ptr");
+  }
+  if (fread(keybuf, 1, db->options.key_size_max + 1, db->fp_index)
+      != db->options.key_size_max + 1) {
+    return mdb_status(MDB_ERR_READ, "cannot read key");
+  }
+  if (fread(valptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read value ptr");
+  }
+  if (fread(valsize, MDB_DATALEN_SIZE, 1, db->fp_index)
+      != MDB_DATALEN_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read value length");
+  }
+  return mdb_status(MDB_OK, NULL);
 }
 
 static mdb_status_t mdb_status(uint8_t code, const char *desc) {
