@@ -30,6 +30,8 @@ static mdb_int_t *mdb_alloc();
 static void mdb_free(mdb_int_t *db);
 static uint32_t mdb_hash(const char *key);
 
+static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
+                                    mdb_ptr_t *ptr);
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
                                    mdb_ptr_t *nextptr, char *keybuf,
                                    mdb_ptr_t *valptr, mdb_size_t *valsize);
@@ -91,21 +93,14 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
 }
 
 mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
-  (void)buf;
-  (void)bufsiz;
-
   mdb_int_t *db = (mdb_int_t*)handle;
-  uint32_t hash = mdb_hash(key);
-  mdb_size_t bucket = hash % db->options.hash_buckets;
+  mdb_size_t bucket = mdb_hash(key) % db->options.hash_buckets;
 
   uint32_t ptr;
-  if (fseek(db->fp_index, (bucket + 1) * MDB_PTR_SIZE, SEEK_SET) != 0) {
-    return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
+  mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
+  if (bucket_read_status.code != MDB_OK) {
+    return bucket_read_status;
   }
-  if (fread(&ptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
-    return mdb_status(MDB_ERR_READ, "cannot read bucket");
-  }
-
   if (fseek(db->fp_index, ptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
   }
@@ -118,27 +113,81 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                             &value_ptr, &value_size);
   if (read_status.code != MDB_OK) {
+    free(key_buffer);
     return read_status;
   }
 
-  while (strcpy(key_buffer, key) != 0 && next_ptr != 0) {
+  while (strcpy(key_buffer, key) != 0 && ptr != 0) {
     read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                  &value_ptr, &value_size);
     if (read_status.code != MDB_OK) {
+      free(key_buffer);
       return read_status;
     }
+    ptr = next_ptr;
   }
 
   if (next_ptr == 0) {
+    free(key_buffer);
     return mdb_status(MDB_NO_KEY, "Key not found");
   }
 
+  free(key_buffer);
   return mdb_read_data(db, value_ptr, value_size, buf, bufsiz);
+}
+
+mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
+  mdb_int_t *db = (mdb_int_t*)handle;
+  mdb_size_t hash = mdb_hash(key) % db->options.hash_buckets;
+
+  uint32_t ptr;
+  mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
+  if (bucket_read_status.code != MDB_OK) {
+    return bucket_read_status;
+  }
+  if (fseek(db->fp_index, ptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
+  }
+
+  char *key_buffer = (char*)malloc(db->options.key_size_max + 1);
+  mdb_ptr_t value_off;
+  mdb_size_t value_size;
+  mdb_status_t read_status = mdb_read_index(db, ptr, &nextptr, key_buffer,
+                                            &value_off, &value_size);
+  if (read_status.code != MDB_OK) {
+    free(key_buffer);
+    return read_status;
+  }
+
+  mdb_ptr_t save_ptr = ptr;
+  while (strcpy(key_buffer, key) != 0 && ptr != 0) {
+    read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
+                                 &value_ptr, &value_size);
+    if (read_status.code != MDB_OK) {
+      free(key_buffer);
+      return read_status;
+    }
+    save_ptr = ptr;
+    ptr = next_ptr;
+  }
+
+  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
 }
 
 mdb_options_t mdb_get_options(mdb_t handle) {
   mdb_int_t *db = (mdb_int_t*)handle;
   return db->options;
+}
+
+static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
+                                    mdb_ptr_t *ptr) {
+  if (fseek(db->fp_index, (bucket + 1) * MDB_PTR_SIZE, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
+  }
+  if (fread(&ptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read bucket");
+  }
+  return mdb_status(MDB_OK, NULL);
 }
 
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,

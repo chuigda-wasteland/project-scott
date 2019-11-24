@@ -43,7 +43,7 @@ typedef void *mdb_t;
 mdb_status_t mdb_open(mdb_t *handle, const char *db_path);
 mdb_status_t mdb_create(mdb_t *handle, mdb_options_t options);
 mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz);
-mdb_status_t mdb_write(mdb_t handle, const char *key, const char *buf);
+mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value);
 mdb_status_t mdb_delete(mdb_t handle, const char *key);
 mdb_options_t mdb_get_options(mdb_t handle);
 
