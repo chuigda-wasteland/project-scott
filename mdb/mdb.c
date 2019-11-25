@@ -41,6 +41,9 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr);
 static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
                                    mdb_ptr_t *ptr);
+static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr);
+static mdb_status_t mdb_data_free(mdb_int_t *db, mdb_ptr_t valptr,
+                                  mdb_size_t valsize);
 
 static char pathbuf[4096];
 
@@ -101,9 +104,7 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
 
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
-  if (bucket_read_status.code != MDB_OK) {
-    return bucket_read_status;
-  }
+  STAT_CHECK_RET(bucket_read_status, {;});
   if (fseek(db->fp_index, ptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
   }
@@ -115,18 +116,12 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
 
   mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                             &value_ptr, &value_size);
-  if (read_status.code != MDB_OK) {
-    free(key_buffer);
-    return read_status;
-  }
+  STAT_CHECK_RET(read_status, { free(key_buffer); })
 
   while (strcpy(key_buffer, key) != 0 && ptr != 0) {
     read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                  &value_ptr, &value_size);
-    if (read_status.code != MDB_OK) {
-      free(key_buffer);
-      return read_status;
-    }
+    STAT_CHECK_RET(read_status, { free(key_buffer); })
     ptr = next_ptr;
   }
 
@@ -144,6 +139,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
   mdb_size_t bucket = mdb_hash(key) % db->options.hash_buckets;
   mdb_size_t new_key_size = strlen(key);
   if (new_key_size > db->options.key_size_max) {
+    return mdb_status(MDB_ERR_KEY_SIZE, "key size too large");
   }
   mdb_size_t new_value_size = strlen(value);
   if (new_value_size > db->options.data_size_max) {
@@ -152,9 +148,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
 
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
-  if (bucket_read_status.code != MDB_OK) {
-    return bucket_read_status;
-  }
+  STAT_CHECK_RET(bucket_read_status, {;})
   if (fseek(db->fp_index, ptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
   }
@@ -165,20 +159,14 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
   mdb_size_t value_size;
   mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                             &value_ptr, &value_size);
-  if (read_status.code != MDB_OK) {
-    free(key_buffer);
-    return read_status;
-  }
+  STAT_CHECK_RET(read_status, {free(key_buffer);})
 
   mdb_ptr_t save_ptr = ptr;
   ptr = next_ptr;
   while (strcpy(key_buffer, key) != 0 && ptr != 0) {
     read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                  &value_ptr, &value_size);
-    if (read_status.code != MDB_OK) {
-      free(key_buffer);
-      return read_status;
-    }
+    STAT_CHECK_RET(read_status, {free(key_buffer);})
     save_ptr = ptr;
     ptr = next_ptr;
   }
@@ -187,16 +175,22 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
   if (ptr == 0) {
     mdb_ptr_t new_idx_ptr;
     mdb_status_t idx_alloc_status = mdb_index_alloc(db, &new_idx_ptr);
-    if (idx_alloc_status.code != MDB_OK) {
-      return idx_alloc_status;
-    }
+    STAT_CHECK_RET(idx_alloc_status, {;})
 
     mdb_ptr_t new_value_ptr;
     mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
                                                     &new_value_ptr);
-    if (data_alloc_status.code != MDB_OK) {
-      return data_alloc_status;
-    }
+    STAT_CHECK_RET(data_alloc_status, {;})
+  } else {
+    mdb_status_t free_data_status = mdb_data_free(db, value_ptr, value_size);
+    STAT_CHECK_RET(free_data_status, {;})
+    mdb_status_t free_idx_status = mdb_index_free(db, save_ptr);
+    STAT_CHECK_RET(free_idx_status, {;})
+
+    mdb_ptr_t new_value_ptr;
+    mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
+                                                    &new_value_ptr);
+    STAT_CHECK_RET(data_alloc_status, {;})
   }
 
   return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
@@ -261,6 +255,14 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
 
 static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
                                    mdb_ptr_t *ptr) {
+  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+}
+
+static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
+  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+}
+static mdb_status_t mdb_data_free(mdb_int_t *db, mdb_ptr_t valptr,
+                                  mdb_size_t valsize) {
   return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
 }
 
