@@ -14,38 +14,38 @@
 static unsigned __g_passing_tests, __g_all_tests;
 static unsigned __g_passing_tests_section, __g_all_tests_section;
 
-#define VK_TEST_BEGIN std::fprintf(stderr, "VKTest starting...\n");
+#define VK_TEST_BEGIN fprintf(stderr, "VKTest starting...\n");
 
 #define VK_TEST_END \
-  std::fprintf(stderr, "All test finished, %u of %u passing\n",\
-               __g_passing_tests, __g_all_tests);
+  fprintf(stderr, "All test finished, %u of %u passing\n",\
+          __g_passing_tests, __g_all_tests);
 
 #define VK_TEST_SECTION_BEGIN(section_name) \
   { \
-    std::fprintf(stderr, "Running test: %s...\n", section_name); \
+    fprintf(stderr, "Running test: %s...\n", section_name); \
     __g_passing_tests_section = 0; \
     __g_all_tests_section = 0; \
   }
 
 #define VK_TEST_SECTION_END(section_name) \
   { \
-    std::fprintf(stderr, "Test %s finished, %u of %u passing.\n", \
-                 section_name, \
-                 __g_passing_tests_section, __g_all_tests_section); \
+    fprintf(stderr, "Test %s finished, %u of %u passing.\n", \
+            section_name, \
+            _g_passing_tests_section, __g_all_tests_section); \
   }
 
 #define VK_ASSERT(condition) \
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    std::fprintf(stderr, "Testing Assert(%s)... ", #condition); \
+    fprintf(stderr, "Testing Assert(%s)... ", #condition); \
     if (condition) { \
-      std::fprintf(stderr, "Passing\n"); \
+      fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
       __g_passing_tests_section++; \
     } \
     else { \
-      std::fprintf(stderr, "Failing\n"); \
+      fprintf(stderr, "Failing\n"); \
     } \
   }
 
@@ -53,14 +53,14 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    std::fprintf(stderr, "Testing AssertNot(%s)... ", #condition); \
+    fprintf(stderr, "Testing AssertNot(%s)... ", #condition); \
     if (!condition) { \
-      std::fprintf(stderr, "Passing\n"); \
+      fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
       __g_passing_tests_section++; \
     } \
     else { \
-      std::fprintf(stderr, "Failing\n"); \
+      fprintf(stderr, "Failing\n"); \
     } \
   }
 
@@ -68,15 +68,15 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    std::fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
-                 #standard, #expr); \
+    fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
+            #standard, #expr); \
     if ((standard) == (expr)) { \
-      std::fprintf(stderr, "Passing\n"); \
+      fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
       __g_passing_tests_section++; \
     } \
     else { \
-      std::fprintf(stderr, "Failing\n"); \
+      fprintf(stderr, "Failing\n"); \
     } \
   }
 
@@ -86,15 +86,15 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    std::fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
-                 #standard, #expr); \
-    if (std::fabs((standard) - (expr)) <= VK_EPSILON) { \
-      std::fprintf(stderr, "Passing\n"); \
+    fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
+            #standard, #expr); \
+    if (fabs((standard) - (expr)) <= VK_EPSILON) { \
+      fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
       __g_passing_tests_section++; \
     } \
     else { \
-      std::fprintf(stderr, "Failing\n"); \
+      fprintf(stderr, "Failing\n"); \
     } \
   }
 
@@ -102,15 +102,15 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
   { \
   __g_all_tests++; \
   __g_all_tests_section++; \
-  std::fprintf(stderr, "Testing AssertNotEquals(%s, %s)... ", \
-               #standard, #expr); \
+  fprintf(stderr, "Testing AssertNotEquals(%s, %s)... ", \
+          #standard, #expr); \
     if ((standard) != (expr)) { \
-      std::fprintf(stderr, "Passing\n"); \
+      fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
       __g_passing_tests_section++; \
     } \
     else { \
-      std::fprintf(stderr, "Failing\n"); \
+      fprintf(stderr, "Failing\n"); \
     } \
   }
 
