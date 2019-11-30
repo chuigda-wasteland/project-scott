@@ -26,7 +26,7 @@ typedef struct {
 } mdb_int_t;
 
 static mdb_status_t mdb_status(uint8_t code, const char *desc);
-static mdb_int_t *mdb_alloc();
+static mdb_int_t *mdb_alloc(void);
 static void mdb_free(mdb_int_t *db);
 static uint32_t mdb_hash(const char *key);
 
@@ -105,7 +105,7 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
-  if (fseek(db->fp_index, ptr, SEEK_SET) != 0) {
+  if (fseek(db->fp_index, (long)ptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
   }
 
@@ -149,7 +149,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;})
-  if (fseek(db->fp_index, ptr, SEEK_SET) != 0) {
+  if (fseek(db->fp_index, (long)ptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
   }
 
@@ -203,7 +203,7 @@ mdb_options_t mdb_get_options(mdb_t handle) {
 
 static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
                                     mdb_ptr_t *ptr) {
-  if (fseek(db->fp_index, (bucket + 1) * MDB_PTR_SIZE, SEEK_SET) != 0) {
+  if (fseek(db->fp_index, (long)((bucket + 1) * MDB_PTR_SIZE), SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
   }
   if (fread(&ptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
@@ -215,6 +215,9 @@ static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
                                    mdb_ptr_t *nextptr, char *keybuf,
                                    mdb_ptr_t *valptr, mdb_size_t *valsize) {
+  if (fseek(db->fp_index, (long)idxptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
+  }
   if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
     return mdb_status(MDB_ERR_READ, "cannot read next ptr");
   }
@@ -239,7 +242,7 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
   if (bufsiz < valsize + 1) {
     return mdb_status(MDB_ERR_BUFSIZ, "value buffer size too small");
   }
-  if (fseek(db->fp_data, valptr, SEEK_SET) != 0) {
+  if (fseek(db->fp_data, (long)valptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to value");
   }
   if (fread(valbuf, 1, valsize, db->fp_data) != valsize) {
@@ -250,20 +253,66 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
 }
 
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
-  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+  if (fseek(db->fp_index, 0, SEEK_SET) < 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
+  }
+  mdb_ptr_t freeptr;
+  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read free ptr");
+  }
+
+  if (freeptr != 0) {
+    *ptr = freeptr;
+    return mdb_status(MDB_OK, NULL);
+  } else {
+    return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+  }
 }
 
 static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
                                    mdb_ptr_t *ptr) {
+  (void)db;
+  (void)valsize;
+  (void)ptr;
   return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
 }
 
 static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
-  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+  if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
+  }
+  mdb_t freeptr;
+  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read free ptr");
+  }
+
+  if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
+  }
+  if (fwrite(&ptr, MDB_PTR_SIZE, 1, db->fp_index)) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
+  }
+
+  if (fseek(db->fp_index, (long)ptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
+  }
+
+  if (fwrite(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write to ptr");
+  }
+
+  return mdb_status(MDB_OK, NULL);
 }
+
 static mdb_status_t mdb_data_free(mdb_int_t *db, mdb_ptr_t valptr,
                                   mdb_size_t valsize) {
-  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+  if (fseek(db->fp_data, (long)valptr, SEEK_SET)) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to data record");
+  }
+  if (fwrite("", 1, valsize, db->fp_data) != valsize) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write empty data");
+  }
+  return mdb_status(MDB_OK, NULL);
 }
 
 static mdb_status_t mdb_status(uint8_t code, const char *desc) {
@@ -304,7 +353,7 @@ static void mdb_free(mdb_int_t *db) {
 static uint32_t mdb_hash(const char *key) {
   uint32_t ret = 0;
   for (uint32_t i = 0; *key != '\0'; ++key, ++i) {
-    ret += *key * i;
+    ret += (uint32_t)*key * i;
   }
   return ret;
 }

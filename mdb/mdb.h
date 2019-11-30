@@ -5,13 +5,11 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-enum {
-  KEY_SIZE_MAX_LIMIT = UINT8_MAX - 1,
-  VALUE_SIZE_MAX_LIMIT = UINT32_MAX - 1,
-  HASH_BUCKETS_MAX = UINT32_MAX,
-  ITEMS_MAX_LIMIT = UINT32_MAX,
-  DB_NAME_MAX = UINT8_MAX
-};
+#define KEY_SIZE_MAX_LIMIT (UINT8_MAX - 1)
+#define VALUE_SIZE_MAX_LIMIT (UINT32_MAX - 1)
+#define HASH_BUCKETS_MAX UINT32_MAX
+#define ITEMS_MAX_LIMIT UINT32_MAX
+#define DB_NAME_MAX UINT8_MAX
 
 typedef struct {
   char *db_name;
@@ -29,6 +27,7 @@ enum {
   MDB_ERR_LOGIC,
   MDB_ERR_OPEN_FILE,
   MDB_ERR_READ,
+  MDB_ERR_WRITE,
   MDB_ERR_ALLOC,
   MDB_ERR_SEEK,
   MDB_ERR_BUFSIZ,
