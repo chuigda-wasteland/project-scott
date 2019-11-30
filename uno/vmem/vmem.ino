@@ -61,11 +61,18 @@ private:
   }
 
   static inline void save_page(uint16_t frame) {
-    
+    vpageno_t pageno = this.pageno[frame];
+    for (uint32_t i = 0; i < VMEM_PAGE_SIZE; i++) {
+      uint32_t eeprom_addr = i + (pageno * VMEM_PAGE_SIZE);
+      EEPROM.write(i, this.frames[frame][i]);
+    }
   }
 
   static inline void load_page(vpageno_t page, uint16_t toframe) {
-    
+    for (uint32_t i = 0; i < VMEM_PAGE_SIZE; i++) {
+      uint32_t eeprom_addr = i + (page * VMEM_PAGE_SIZE);
+      this.frames[toframe] = EEPROM.read(eeprom_addr);
+    }
   }
 
   static inline int16_t get_frame_no(vpageno_t pageno) {
