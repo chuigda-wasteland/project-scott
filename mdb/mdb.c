@@ -271,9 +271,34 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
 
 static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
                                    mdb_ptr_t *ptr) {
-  (void)db;
-  (void)valsize;
-  (void)ptr;
+  if (fseek(db->fp_data, 0, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of data file");
+  }
+  while (!feof(db->fp_data)) {
+    uint8_t byte;
+    if (fread(&byte, 1, 1, db->fp_data) != 1) {
+      return mdb_status(MDB_ERR_READ, "cannot read data file");
+    }
+    while (!feof(db->fp_data) && byte != '\0') {
+      if (fread(&byte, 1, 1, db->fp_data) != 1) {
+        return mdb_status(MDB_ERR_READ, "cannot read data file");
+      }
+    }
+    
+    mdb_ptr_t startptr = (mdb_ptr_t)ftell(db->fp_data) - 1;
+    while (!feof(db->fp_data) && byte == '\0') {
+      if (fread(&byte, 1, 1, db->fp_data) != 1) {
+        return mdb_status(MDB_ERR_READ, "cannot read data file");
+      }
+    }
+    mdb_ptr_t endptr = (mdb_ptr_t)ftell(db->fp_data);
+
+    if (endptr - startptr >= valsize) {
+      *ptr = startptr;
+      return mdb_status(MDB_OK, NULL);
+    }
+  }
+
   return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
 }
 

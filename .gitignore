@@ -23,3 +23,6 @@ memds/lib
 build-*/*
 CMakeLists.txt.user
 CMakeLists.txt.user*
+
+# Visual Studio Code
+.vscode/*
