@@ -334,7 +334,8 @@ static mdb_status_t mdb_data_free(mdb_int_t *db, mdb_ptr_t valptr,
   if (fseek(db->fp_data, (long)valptr, SEEK_SET)) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to data record");
   }
-  if (fwrite("", 1, valsize, db->fp_data) != valsize) {
+  uint8_t zero = '\0';
+  if (fwrite(&zero, 1, valsize, db->fp_data) != valsize) {
     return mdb_status(MDB_ERR_WRITE, "cannot write empty data");
   }
   return mdb_status(MDB_OK, NULL);
