@@ -83,27 +83,23 @@ class LSMLevel:
 class LSMTree:
     def __init__(self, folder_name: str, memtable_size_thres: int):
         self.folder_name = folder_name
-        self.mut_table: Dict[str, str] = dict()
-        self.imm_table: Dict[str, str] = None
+        self.mem_table: Dict[str, str] = dict()
         self.levels: [LSMLevel] = []
 
     def put(self, key: str, value: str) -> bool:
-        self.mut_table[key] = value
+        self.mem_table[key] = value
         maybe_compaction()
 
     def delete(self, key: str) -> bool:
-        self.mut_table[key] = None
+        self.mem_table[key] = None
         maybe_compaction()
 
     def maybe_compaction(self):
-        if len(self.mut_table) >= self.memtable_size_thres:
+        if len(self.mem_table) >= self.memtable_size_thres:
             pass
 
     def get(self, key: str) -> str:
-        ret = self.mut_table.get(key)
-        if ret is not None:
-            return ret
-        ret = self.imm_table.get(key)
+        ret = self.mem_table.get(key)
         if ret is not None:
             return ret
         for level in self.levels:
