@@ -66,22 +66,54 @@ class LSMLevel:
                 break
         return ret
     
+    def interleaves(block1: LSMBlock, block2: LSMBlock) -> bool:
+        if block1.get_low() < block2.get_high() and block1.get_high() > block2.get_low():
+            return true
+        elif block2.get_low() < block1.get_high() and block2.get_high() > block1.get_low():
+            return true
+        else:
+            return false
+
     def merge_blocks(self, blocks: [LSMBlock]) -> bool:
-        pass
+        if self.level is 1:
+            self.blocks += blocks
+        else:
+            pass
 
 class LSMTree:
-    def __init__(self, folder_name: str):
+    def __init__(self, folder_name: str, memtable_size_thres: int):
         self.folder_name = folder_name
-        self.mut_table = []
+        self.mut_table: Dict[str, str] = dict()
+        self.imm_table: Dict[str, str] = None
+        self.levels: [LSMLevel] = []
 
     def put(self, key: str, value: str) -> bool:
-        pass
+        self.mut_table[key] = value
+        maybe_compaction()
 
     def delete(self, key: str) -> bool:
-        pass
+        self.mut_table[key] = None
+        maybe_compaction()
+
+    def maybe_compaction(self):
+        if len(self.mut_table) >= self.memtable_size_thres:
+            pass
 
     def get(self, key: str) -> str:
-        pass
+        ret = self.mut_table.get(key)
+        if ret is not None:
+            return ret
+        ret = self.imm_table.get(key)
+        if ret is not None:
+            return ret
+        for level in self.levels:
+            ret = level.get(key)
+            if ret is not None:
+                if ret == '':
+                    return None
+                else:
+                    return ret
+        return None
 
     def scan(self, key1: str, key2: str) -> str:
         pass
