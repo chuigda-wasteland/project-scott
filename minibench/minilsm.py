@@ -52,6 +52,20 @@ class LSMBlock:
                     new_cache[kvpair[0]] = kvpair[1]
             return new_cache.get(key)
 
+    def interleaves_with(self, another: LSMBlock) -> bool:
+        if self.get_low() <= another.get_high() and self.get_high() >= another.get_low():
+            return True
+        elif another.get_low() <= self.get_high() and another.get_high() >= self.get_low():
+            return True
+        else:
+            return False
+
+def insert_unique(l: list, a: any):
+    for item in l:
+        if item == a:
+            return
+    l.push(a)
+
 class LSMLevel:
     def __init__(self, level: int, manifest_file_name: str):
         self.manifest_file_name = manifest_file_name
@@ -66,18 +80,15 @@ class LSMLevel:
                 break
         return ret
     
-    def interleaves(block1: LSMBlock, block2: LSMBlock) -> bool:
-        if block1.get_low() < block2.get_high() and block1.get_high() > block2.get_low():
-            return true
-        elif block2.get_low() < block1.get_high() and block2.get_high() > block1.get_low():
-            return true
-        else:
-            return false
-
     def merge_blocks(self, blocks: [LSMBlock]) -> bool:
         if self.level is 1:
             self.blocks += blocks
         else:
+            blocks_to_merge = []
+            for self_block in self.blocks:
+                for incoming_block in blocks:
+                    if self_block.interleaves_with(incoming_block):
+                        insert_unique(blocks_to_merge, incoming_block)
             pass
 
 class LSMTree:
