@@ -35,6 +35,9 @@ static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
                                    mdb_ptr_t *nextptr, char *keybuf,
                                    mdb_ptr_t *valptr, mdb_size_t *valsize);
+static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
+                                    const char *keybuf, mdb_ptr_t valptr,
+                                    mdb_size_t valsize);
 static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
                                   mdb_size_t valsize, char *valbuf,
                                   mdb_size_t bufsiz);
@@ -236,6 +239,29 @@ static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
   return mdb_status(MDB_OK, NULL);
 }
 
+static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
+                                    const char *keybuf, mdb_ptr_t valptr,
+                                    mdb_size_t valsize) {
+  if (fseek(db->fp_index, (long)(idxptr + MDB_PTR_SIZE), SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
+  }
+  size_t key_len = strlen(keybuf);
+  if (fwrite(keybuf, 1, key_len, db->fp_index) < key_len) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write key part of index");
+  }
+  size_t value_ptr_pos = idxptr + MDB_PTR_SIZE + db->options.key_size_max;
+  if (fseek(db->fp_index, (long)value_ptr_pos, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to value part of index");
+  }
+  if (fwrite(&valptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write to value part of index");
+  }
+  if (fwrite(&valsize, MDB_DATALEN_SIZE, 1, db->fp_index) < MDB_DATALEN_SIZE) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write to value part of index");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
 static mdb_status_t mdb_read_nextptr(mdb_int_t *db, mdb_ptr_t idxptr,
                                      mdb_ptr_t *nextptr) {
   if (fseek(db->fp_index, (long)idxptr, SEEK_SET) != 0) {
@@ -263,12 +289,6 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
   return mdb_status(MDB_OK, NULL);
 }
 
-static mdb_size_t mdb_index_size(mdb_int_t *db) {
-  return MDB_PTR_SIZE * 2
-         + db->options.key_size_max
-         + MDB_DATALEN_SIZE;
-}
-
 static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
   if (fseek(db->fp_index, 0, SEEK_END) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to end of index file");
@@ -276,8 +296,8 @@ static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
   *ptr = (mdb_ptr_t)ftell(db->fp_index);
 
   unsigned char zero = '\0';
-  mdb_size_t index_size = (long)mdb_index_size(db);
-  if (fwrite(&zero, 1, index_size, db->fp_index) < index_size) {
+  if (fwrite(&zero, 1, db->index_record_size, db->fp_index) 
+      < db->index_record_size) {
     return mdb_status(MDB_ERR_WRITE, "cannot stretch index file");
   }
   return mdb_status(MDB_OK, NULL);
