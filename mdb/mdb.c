@@ -275,7 +275,7 @@ static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
   }
   *ptr = (mdb_ptr_t)ftell(db->fp_index);
 
-  char zero = '\0';
+  unsigned char zero = '\0';
   mdb_size_t index_size = (long)mdb_index_size(db);
   if (fwrite(&zero, 1, index_size, db->fp_index) < index_size) {
     return mdb_status(MDB_ERR_WRITE, "cannot stretch index file");
@@ -345,7 +345,13 @@ static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
     }
   }
 
-  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+  mdb_ptr_t end_ptr = (mdb_ptr_t)ftell(db->fp_data);
+  unsigned char zero = '\0';
+  if (fwrite(&zero, 1, valsize, db->fp_data) < valsize) {
+    return mdb_status(MDB_ERR_WRITE, "cannot stretch data file");
+  }
+  *ptr = end_ptr;
+  return mdb_status(MDB_OK, NULL);
 }
 
 static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
