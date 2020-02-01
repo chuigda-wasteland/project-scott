@@ -24,7 +24,7 @@ class LSMBlockCache:
     def remove_cache(self, block_file_name: str):
         if block_file_name in self.cache_blocks:
             del self.cache_blocks[block_file_name]
-    
+
 class LSMBlock:
     def __init__(self, block_file_name: str, low: str, high: str, block_cache: LSMBlockCache):
         self.block_file_name = block_file_name

@@ -236,6 +236,17 @@ static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
   return mdb_status(MDB_OK, NULL);
 }
 
+static mdb_status_t mdb_read_nextptr(mdb_int_t *db, mdb_ptr_t idxptr,
+                                     mdb_ptr_t *nextptr) {
+  if (fseek(db->fp_index, (long)idxptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
+  }
+  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_READ, "cannot read next ptr");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
 static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
                                   mdb_size_t valsize, char *valbuf,
                                   mdb_size_t bufsiz) {
@@ -252,6 +263,36 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
   return mdb_status(MDB_OK, NULL);
 }
 
+static mdb_size_t mdb_index_size(mdb_int_t *db) {
+  return MDB_PTR_SIZE * 2
+         + db->options.key_size_max
+         + MDB_DATALEN_SIZE;
+}
+
+static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
+  if (fseek(db->fp_index, 0, SEEK_END) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to end of index file");
+  }
+  *ptr = (mdb_ptr_t)ftell(db->fp_index);
+
+  char zero = '\0';
+  mdb_size_t index_size = (long)mdb_index_size(db);
+  if (fwrite(&zero, 1, index_size, db->fp_index) < index_size) {
+    return mdb_status(MDB_ERR_WRITE, "cannot stretch index file");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
+static mdb_status_t mdb_update_freeptr(mdb_int_t *db, mdb_ptr_t new_freeptr) {
+  if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
+  }
+  if (fwrite(&new_freeptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
   if (fseek(db->fp_index, 0, SEEK_SET) < 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
@@ -262,10 +303,15 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
   }
 
   if (freeptr != 0) {
+    mdb_ptr_t new_freeptr;
+    mdb_status_t nextptr_read_stat = mdb_read_nextptr(db, freeptr, &new_freeptr);
+    STAT_CHECK_RET(nextptr_read_stat, {;});
+    mdb_status_t freeptr_update_stat = mdb_update_freeptr(db, new_freeptr);
+    STAT_CHECK_RET(freeptr_update_stat, {;});
     *ptr = freeptr;
     return mdb_status(MDB_OK, NULL);
   } else {
-    return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
+    return mdb_stretch_index_file(db, ptr);
   }
 }
 
@@ -314,7 +360,7 @@ static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
   if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
   }
-  if (fwrite(&ptr, MDB_PTR_SIZE, 1, db->fp_index)) {
+  if (fwrite(&ptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
   }
 
