@@ -9,4 +9,6 @@ add_library(mdb mdb.c)
 add_executable(testmdb testmdb.c)
 target_link_libraries(testmdb mdb)
 
+add_executable(testmdb_int testmdb_int.c)
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wno-unused-function")

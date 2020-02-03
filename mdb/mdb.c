@@ -209,7 +209,7 @@ static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
   if (fseek(db->fp_index, (long)((bucket + 1) * MDB_PTR_SIZE), SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
   }
-  if (fread(&ptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+  if (fread(&ptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read bucket");
   }
   return mdb_status(MDB_OK, NULL);
@@ -221,7 +221,7 @@ static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
   if (fseek(db->fp_index, (long)idxptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
   }
-  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read next ptr");
   }
   if (fread(keybuf, 1, db->options.key_size_max, db->fp_index)
@@ -253,10 +253,10 @@ static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
   if (fseek(db->fp_index, (long)value_ptr_pos, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to value part of index");
   }
-  if (fwrite(&valptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+  if (fwrite(&valptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to value part of index");
   }
-  if (fwrite(&valsize, MDB_DATALEN_SIZE, 1, db->fp_index) < MDB_DATALEN_SIZE) {
+  if (fwrite(&valsize, MDB_DATALEN_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to value part of index");
   }
   return mdb_status(MDB_OK, NULL);
@@ -267,7 +267,7 @@ static mdb_status_t mdb_read_nextptr(mdb_int_t *db, mdb_ptr_t idxptr,
   if (fseek(db->fp_index, (long)idxptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
   }
-  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read next ptr");
   }
   return mdb_status(MDB_OK, NULL);
@@ -307,7 +307,7 @@ static mdb_status_t mdb_update_freeptr(mdb_int_t *db, mdb_ptr_t new_freeptr) {
   if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
   }
-  if (fwrite(&new_freeptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+  if (fwrite(&new_freeptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
   }
   return mdb_status(MDB_OK, NULL);
@@ -318,7 +318,8 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
   }
   mdb_ptr_t freeptr;
-  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+
+  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read free ptr");
   }
 
@@ -379,14 +380,14 @@ static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
   }
   mdb_t freeptr;
-  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read free ptr");
   }
 
   if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
   }
-  if (fwrite(&ptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+  if (fwrite(&ptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
   }
 
@@ -394,7 +395,7 @@ static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
   }
 
-  if (fwrite(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) < MDB_PTR_SIZE) {
+  if (fwrite(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to ptr");
   }
 

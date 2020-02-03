@@ -31,7 +31,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
   { \
     fprintf(stderr, "Test %s finished, %u of %u passing.\n", \
             section_name, \
-            _g_passing_tests_section, __g_all_tests_section); \
+            __g_passing_tests_section, __g_all_tests_section); \
   }
 
 #define VK_ASSERT(condition) \
@@ -71,6 +71,21 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
             #standard, #expr); \
     if ((standard) == (expr)) { \
+      fprintf(stderr, "Passing\n"); \
+      __g_passing_tests++; \
+      __g_passing_tests_section++; \
+    } \
+    else { \
+      fprintf(stderr, "Failing\n"); \
+    } \
+  }
+
+#define VK_ASSERT_EQUALS_S(standard, expr) \
+  { \
+    __g_all_tests++; \
+    __g_all_tests_section++; \
+    fprintf(stderr, "Testing AssertEquals(%s, %s)", standard, expr); \
+    if (!strcmp(standard, expr)) { \
       fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
       __g_passing_tests_section++; \
