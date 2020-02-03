@@ -229,11 +229,10 @@ static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
     return mdb_status(MDB_ERR_READ, "cannot read key");
   }
   keybuf[db->options.key_size_max] = '\0';
-  if (fread(valptr, MDB_PTR_SIZE, 1, db->fp_index) != MDB_PTR_SIZE) {
+  if (fread(valptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read value ptr");
   }
-  if (fread(valsize, MDB_DATALEN_SIZE, 1, db->fp_index)
-      != MDB_DATALEN_SIZE) {
+  if (fread(valsize, MDB_DATALEN_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read value length");
   }
   return mdb_status(MDB_OK, NULL);
