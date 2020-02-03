@@ -1,6 +1,8 @@
 #include "mdb.c"
 #include "vktest.h"
 
+#include <time.h>
+
 #define TESTDB_DB_NAME "testdb"
 #define TESTDB_KEY_SIZE_MAX 8
 #define TESTDB_DATA_SIZE_MAX 1024
@@ -31,6 +33,10 @@ mdb_int_t open_test_db(mdb_options_t options) {
   mdb_ptr_t free_ptr = 0;
   fwrite(&free_ptr, MDB_PTR_SIZE, 1, ret.fp_index);
   ret.fp_data = fopen("data", "wb+");
+
+  ret.index_record_size = ret.options.key_size_max
+                          + MDB_PTR_SIZE * 2
+                          + MDB_DATALEN_SIZE;
   return ret;
 }
 
@@ -56,12 +62,12 @@ void test1() {
   VK_TEST_SECTION_BEGIN("simple index write");
 
   mdb_int_t testdb = open_test_db(get_options_no_hash_buckets());
-  mdb_ptr_t idxptr_arr[512];
-  static char keys[TESTDB_KEY_SIZE_MAX][512];
-  mdb_ptr_t valptr_arr[512];
-  mdb_size_t valsize_arr[512];
+  mdb_ptr_t idxptr_arr[32];
+  static char keys[32][TESTDB_KEY_SIZE_MAX];
+  mdb_ptr_t valptr_arr[32];
+  mdb_size_t valsize_arr[32];
 
-  for (size_t i = 0; i < 2; i++) {
+  for (size_t i = 0; i < 32; i++) {
     generate_seq_key(keys[i], i);
     valptr_arr[i] = rand();
     valsize_arr[i] = rand();
@@ -73,7 +79,7 @@ void test1() {
     VK_ASSERT_EQUALS(MDB_OK, index_write_status.code);
   }
 
-  for (size_t i = 0; i < 2; i++) {
+  for (size_t i = 0; i < 32; i++) {
     char test_key[TESTDB_KEY_SIZE_MAX + 1];
     mdb_ptr_t test_nextptr;
     mdb_ptr_t test_valptr;
@@ -84,6 +90,7 @@ void test1() {
                                                    test_key,
                                                    &test_valptr,
                                                    &test_valsize);
+    fprintf(stderr, "i = %d\n", i);
     VK_ASSERT_EQUALS(MDB_OK, index_read_status.code);
 
     VK_ASSERT_EQUALS_S(keys[i], test_key);
@@ -95,6 +102,7 @@ void test1() {
 }
 
 int main() {
+  srand(time(NULL));
   test1();
   return 0;
 }

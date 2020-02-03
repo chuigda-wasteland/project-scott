@@ -71,10 +71,9 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
   fscanf(db->fp_superblock, "%u", &(db->options.hash_buckets));
   fscanf(db->fp_superblock, "%u", &(db->options.items_max));
 
-  db->index_record_size =
-      db->options.key_size_max
-      + MDB_PTR_SIZE * 2
-      + MDB_DATALEN_SIZE;
+  db->index_record_size = db->options.key_size_max
+                          + MDB_PTR_SIZE * 2
+                          + MDB_DATALEN_SIZE;
 
   if (ferror(db->fp_superblock)) {
     mdb_free(db);
@@ -295,9 +294,10 @@ static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
   *ptr = (mdb_ptr_t)ftell(db->fp_index);
 
   unsigned char zero = '\0';
-  if (fwrite(&zero, 1, db->index_record_size, db->fp_index) 
-      < db->index_record_size) {
-    return mdb_status(MDB_ERR_WRITE, "cannot stretch index file");
+  for (size_t i = 0; i < db->index_record_size; i++) {
+    if (fwrite(&zero, 1, 1, db->fp_index) < 1) {
+      return mdb_status(MDB_ERR_WRITE, "cannot stretch index file");
+    }
   }
   return mdb_status(MDB_OK, NULL);
 }
@@ -324,7 +324,8 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
 
   if (freeptr != 0) {
     mdb_ptr_t new_freeptr;
-    mdb_status_t nextptr_read_stat = mdb_read_nextptr(db, freeptr, &new_freeptr);
+    mdb_status_t nextptr_read_stat =
+        mdb_read_nextptr(db, freeptr, &new_freeptr);
     STAT_CHECK_RET(nextptr_read_stat, {;});
     mdb_status_t freeptr_update_stat = mdb_update_freeptr(db, new_freeptr);
     STAT_CHECK_RET(freeptr_update_stat, {;});

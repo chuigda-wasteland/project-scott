@@ -84,7 +84,8 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    fprintf(stderr, "Testing AssertEquals(%s, %s)", standard, expr); \
+    fprintf(stderr, "Testing AssertEquals(\"%s\", \"%s\")... ",\
+            standard, expr); \
     if (!strcmp(standard, expr)) { \
       fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
