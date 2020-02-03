@@ -377,16 +377,16 @@ static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
       }
     }
     
-    mdb_ptr_t startptr = (mdb_ptr_t)ftell(db->fp_data);
+    mdb_ptr_t start_ptr = (mdb_ptr_t)ftell(db->fp_data);
     while (!feof(db->fp_data) && byte == '\0') {
       if (fread(&byte, 1, 1, db->fp_data) != 1 && !feof(db->fp_data)) {
         return mdb_status(MDB_ERR_READ, "cannot read data file");
       }
     }
-    mdb_ptr_t endptr = (mdb_ptr_t)ftell(db->fp_data);
+    mdb_ptr_t end_ptr = (mdb_ptr_t)ftell(db->fp_data);
 
-    if (endptr - startptr >= valsize) {
-      *ptr = startptr;
+    if (end_ptr - start_ptr >= valsize) {
+      *ptr = start_ptr;
       return mdb_status(MDB_OK, NULL);
     }
   }
@@ -435,8 +435,10 @@ static mdb_status_t mdb_data_free(mdb_int_t *db, mdb_ptr_t valptr,
     return mdb_status(MDB_ERR_SEEK, "cannot seek to data record");
   }
   uint8_t zero = '\0';
-  if (fwrite(&zero, 1, valsize, db->fp_data) != valsize) {
-    return mdb_status(MDB_ERR_WRITE, "cannot write empty data");
+  for (size_t i = 0; i < valsize; i++) {
+    if (fwrite(&zero, 1, 1, db->fp_data) != 1) {
+      return mdb_status(MDB_ERR_WRITE, "cannot write empty data");
+    }
   }
   return mdb_status(MDB_OK, NULL);
 }

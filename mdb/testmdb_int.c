@@ -117,8 +117,8 @@ void test2() {
 
   mdb_int_t testdb = open_test_db(get_options_no_hash_buckets());
 
-  mdb_ptr_t valptr_arr[128];
-  mdb_size_t valsize_arr[128];
+  mdb_ptr_t valptr_arr[32];
+  mdb_size_t valsize_arr[32];
 
   char buffer[64 + 32 + 1];
   for (size_t i = 0; i < 32; i++) {
@@ -219,10 +219,10 @@ void test3() {
     mdb_size_t test_valsize;
 
     mdb_status_t index_read_status = mdb_read_index(&testdb, new_idxptr_arr[i],
-                                                   &test_nextptr,
-                                                   test_key,
-                                                   &test_valptr,
-                                                   &test_valsize);
+                                                    &test_nextptr,
+                                                    test_key,
+                                                    &test_valptr,
+                                                    &test_valsize);
     VK_ASSERT_EQUALS(MDB_OK, index_read_status.code);
 
     VK_ASSERT_EQUALS_S(new_keys[i], test_key);
@@ -230,21 +230,94 @@ void test3() {
     VK_ASSERT_EQUALS(new_valsize_arr[i], test_valsize);
   }
 
-  fprintf(stderr, "file size = %lu\n", mdb_index_size(&testdb));
+  fprintf(stderr, "file size = %lu\n", mdb_index_size((mdb_t*)&testdb));
   fprintf(stderr, "MDB_PTR_SIZE = %u\n", MDB_PTR_SIZE);
-  fprintf(stderr, "index record size size = %lu\n", testdb.index_record_size);
+  fprintf(stderr, "index record size size = %u\n", testdb.index_record_size);
   VK_ASSERT_EQUALS(MDB_PTR_SIZE + testdb.index_record_size * (32 - 4 + 8),
-                   mdb_index_size(&testdb));
+                   mdb_index_size((mdb_t*)&testdb));
 
   close_test_db(testdb);
 
   VK_TEST_SECTION_END("index reuse");
 }
 
+void test4() {
+  VK_TEST_SECTION_BEGIN("data reuse");
+
+  mdb_int_t testdb = open_test_db(get_options_no_hash_buckets());
+
+  mdb_ptr_t valptr_arr[32];
+  mdb_size_t valsize_arr[32];
+
+  char buffer[64 + 32 + 1];
+  for (size_t i = 0; i < 32; i++) {
+    memset(buffer, i + 1, 64 + 32);
+    valsize_arr[i] = rand() % 64 + 32;
+    (void)mdb_data_alloc(&testdb, valsize_arr[i], valptr_arr + i);
+    (void)mdb_write_data(&testdb, valptr_arr[i], buffer, valsize_arr[i]);
+  }
+
+  for (size_t i = 0; i < 8; i++) {
+    size_t to_remove = rand() % 32;
+    while (valptr_arr[to_remove] == 0) {
+      to_remove = rand() % 32;
+    }
+    mdb_status_t free_status = mdb_data_free(&testdb, valptr_arr[to_remove],
+                                             valsize_arr[to_remove]);
+    valptr_arr[to_remove] = 0;
+    VK_ASSERT_EQUALS(MDB_OK, free_status.code);
+  }
+
+  mdb_ptr_t new_valptr_arr[8];
+  mdb_size_t new_valsize_arr[8];
+
+  for (size_t i = 0; i < 8; i++) {
+    memset(buffer, i + 44, 64 + 32);
+    new_valsize_arr[i] = rand() % 64 + 32;
+    mdb_status_t alloc_status = mdb_data_alloc(&testdb, new_valsize_arr[i],
+                                               new_valptr_arr + i);
+    VK_ASSERT_EQUALS(MDB_OK, alloc_status.code);
+    mdb_status_t write_status = mdb_write_data(&testdb, new_valptr_arr[i],
+                                               buffer, new_valsize_arr[i]);
+
+    VK_ASSERT_EQUALS(MDB_OK, write_status.code);
+  }
+
+  for (size_t i = 0; i < 32; i++) {
+    if (valptr_arr[i] == 0) {
+      continue;
+    }
+    mdb_status_t read_status = mdb_read_data(&testdb, valptr_arr[i],
+                                             valsize_arr[i], buffer,
+                                             64 + 32 + 1);
+    VK_ASSERT_EQUALS(MDB_OK, read_status.code);
+    VK_ASSERT(check_seq(buffer, i + 1, valsize_arr[i]));
+  }
+
+  for (size_t i = 0; i < 8; i++) {
+    mdb_status_t read_status = mdb_read_data(&testdb, new_valptr_arr[i],
+                                             new_valsize_arr[i], buffer,
+                                             64 + 32 + 1);
+    VK_ASSERT_EQUALS(MDB_OK, read_status.code);
+    VK_ASSERT(check_seq(buffer, i + 44, new_valsize_arr[i]));
+  }
+
+  close_test_db(testdb);
+
+  VK_TEST_SECTION_END("data reuse");
+}
+
 int main() {
   srand(time(NULL));
-  // test1();
-  // test2();
+
+  VK_TEST_BEGIN;
+
+  test1();
+  test2();
   test3();
+  test4();
+
+  VK_TEST_END;
+
   return 0;
 }
