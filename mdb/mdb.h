@@ -56,4 +56,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value);
 mdb_status_t mdb_delete(mdb_t handle, const char *key);
 mdb_options_t mdb_get_options(mdb_t handle);
 
+size_t mdb_index_size(mdb_t *handle);
+size_t mdb_data_size(mdb_t *handle);
+
 #endif // MINIDB_H

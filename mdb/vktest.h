@@ -14,6 +14,15 @@
 static unsigned __g_passing_tests, __g_all_tests;
 static unsigned __g_passing_tests_section, __g_all_tests_section;
 
+void __vk_maybe_terminate() {
+#ifdef VK_TERMINATE_ON_FAIL
+  fprintf(stderr, "VK_TERMINATE_ON_FAIL was set, terminating test...\n");
+  fprintf(stderr, "Test terminated, %u of %u passing.\n",
+          __g_passing_tests_section, __g_all_tests_section);
+  abort();
+#endif
+}
+
 #define VK_TEST_BEGIN fprintf(stderr, "VKTest starting...\n");
 
 #define VK_TEST_END \
@@ -46,6 +55,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     } \
     else { \
       fprintf(stderr, "Failing\n"); \
+      __vk_maybe_terminate(); \
     } \
   }
 
@@ -61,6 +71,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     } \
     else { \
       fprintf(stderr, "Failing\n"); \
+      __vk_maybe_terminate(); \
     } \
   }
 
@@ -77,6 +88,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     } \
     else { \
       fprintf(stderr, "Failing\n"); \
+      __vk_maybe_terminate(); \
     } \
   }
 
@@ -93,6 +105,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     } \
     else { \
       fprintf(stderr, "Failing\n"); \
+      __vk_maybe_terminate(); \
     } \
   }
 
@@ -111,6 +124,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     } \
     else { \
       fprintf(stderr, "Failing\n"); \
+      __vk_maybe_terminate(); \
     } \
   }
 
@@ -127,6 +141,7 @@ static unsigned __g_passing_tests_section, __g_all_tests_section;
     } \
     else { \
       fprintf(stderr, "Failing\n"); \
+      __vk_maybe_terminate(); \
     } \
   }
 

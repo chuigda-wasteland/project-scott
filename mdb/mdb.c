@@ -41,6 +41,8 @@ static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
 static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
                                   mdb_size_t valsize, char *valbuf,
                                   mdb_size_t bufsiz);
+static mdb_status_t mdb_write_data(mdb_int_t *db, mdb_ptr_t valptr,
+                                   const char *valbuf, mdb_size_t valsize);
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr);
 static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
                                    mdb_ptr_t *ptr);
@@ -203,6 +205,18 @@ mdb_options_t mdb_get_options(mdb_t handle) {
   return db->options;
 }
 
+size_t mdb_index_size(mdb_t *handle) {
+  mdb_int_t *db = (mdb_int_t*)handle;
+  (void)fseek(db->fp_index, 0, SEEK_END);
+  return ftell(db->fp_index);
+}
+
+size_t mdb_data_size(mdb_t *handle) {
+  mdb_int_t *db = (mdb_int_t*)handle;
+  (void)fseek(db->fp_data, 0, SEEK_END);
+  return ftell(db->fp_data);
+}
+
 static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
                                     mdb_ptr_t *ptr) {
   if (fseek(db->fp_index, (long)((bucket + 1) * MDB_PTR_SIZE), SEEK_SET) != 0) {
@@ -287,6 +301,17 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
   return mdb_status(MDB_OK, NULL);
 }
 
+static mdb_status_t mdb_write_data(mdb_int_t *db, mdb_ptr_t valptr,
+                                   const char *valbuf, mdb_size_t valsize) {
+  if (fseek(db->fp_data, (long)valptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to value");
+  }
+  if (fwrite(valbuf, 1, valsize, db->fp_data) < valsize) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write data");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
 static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
   if (fseek(db->fp_index, 0, SEEK_END) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to end of index file");
@@ -343,18 +368,18 @@ static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
   }
   while (!feof(db->fp_data)) {
     uint8_t byte;
-    if (fread(&byte, 1, 1, db->fp_data) != 1) {
+    if (fread(&byte, 1, 1, db->fp_data) != 1 && !feof(db->fp_data)) {
       return mdb_status(MDB_ERR_READ, "cannot read data file");
     }
     while (!feof(db->fp_data) && byte != '\0') {
-      if (fread(&byte, 1, 1, db->fp_data) != 1) {
+      if (fread(&byte, 1, 1, db->fp_data) != 1 && !feof(db->fp_data)) {
         return mdb_status(MDB_ERR_READ, "cannot read data file");
       }
     }
     
-    mdb_ptr_t startptr = (mdb_ptr_t)ftell(db->fp_data) - 1;
+    mdb_ptr_t startptr = (mdb_ptr_t)ftell(db->fp_data);
     while (!feof(db->fp_data) && byte == '\0') {
-      if (fread(&byte, 1, 1, db->fp_data) != 1) {
+      if (fread(&byte, 1, 1, db->fp_data) != 1 && !feof(db->fp_data)) {
         return mdb_status(MDB_ERR_READ, "cannot read data file");
       }
     }
@@ -368,8 +393,10 @@ static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
 
   mdb_ptr_t end_ptr = (mdb_ptr_t)ftell(db->fp_data);
   unsigned char zero = '\0';
-  if (fwrite(&zero, 1, valsize, db->fp_data) < valsize) {
-    return mdb_status(MDB_ERR_WRITE, "cannot stretch data file");
+  for (size_t i = 0; i < valsize; i++) {
+    if (fwrite(&zero, 1, 1, db->fp_data) < 1) {
+      return mdb_status(MDB_ERR_WRITE, "cannot stretch data file");
+    }
   }
   *ptr = end_ptr;
   return mdb_status(MDB_OK, NULL);
