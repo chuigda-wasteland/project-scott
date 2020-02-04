@@ -199,7 +199,6 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
     save_ptr = ptr;
     ptr = next_ptr;
   }
-  free(key_buffer);
 
   if (ptr == 0) {
     mdb_ptr_t new_idx_ptr;
@@ -209,16 +208,18 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
     mdb_ptr_t new_value_ptr;
     mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
                                                     &new_value_ptr);
-    STAT_CHECK_RET(data_alloc_status, {;})
+    STAT_CHECK_RET(data_alloc_status, {
+                     (void)mdb_index_free(db, new_idx_ptr);
+                   });
+
+
   } else {
     mdb_status_t free_data_status = mdb_data_free(db, value_ptr, value_size);
     STAT_CHECK_RET(free_data_status, {;})
-    mdb_status_t free_idx_status = mdb_index_free(db, save_ptr);
-    STAT_CHECK_RET(free_idx_status, {;})
 
-    mdb_ptr_t new_value_ptr;
+    mdb_ptr_t data_ptr;
     mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
-                                                    &new_value_ptr);
+                                                    &data_ptr);
     STAT_CHECK_RET(data_alloc_status, {;})
   }
 
