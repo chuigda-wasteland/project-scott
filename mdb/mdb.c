@@ -35,6 +35,8 @@ static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
                                    mdb_ptr_t *nextptr, char *keybuf,
                                    mdb_ptr_t *valptr, mdb_size_t *valsize);
+static mdb_status_t mdb_write_bucket(mdb_int_t *db, mdb_ptr_t bucket,
+                                     mdb_ptr_t value);
 static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
                                     const char *keybuf, mdb_ptr_t valptr,
                                     mdb_size_t valsize);
@@ -109,9 +111,6 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
-  if (fseek(db->fp_index, (long)ptr, SEEK_SET) != 0) {
-    return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
-  }
 
   mdb_ptr_t next_ptr;
   char *key_buffer = (char*)malloc(db->options.key_size_max + 1);
@@ -152,13 +151,39 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
 
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
-  STAT_CHECK_RET(bucket_read_status, {;})
-  if (fseek(db->fp_index, (long)ptr, SEEK_SET) != 0) {
-    return mdb_status(MDB_ERR_SEEK, "cannot seek to index record");
+  STAT_CHECK_RET(bucket_read_status, {;});
+
+  if (ptr == 0) {
+    mdb_ptr_t index_ptr;
+    mdb_status_t index_alloc_status = mdb_index_alloc(db, &index_ptr);
+    mdb_ptr_t data_ptr;
+    STAT_CHECK_RET(index_alloc_status, {;});
+    mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
+                                                    &data_ptr);
+    STAT_CHECK_RET(data_alloc_status, { (void)mdb_index_free(db, index_ptr); });
+
+    mdb_status_t data_write_status = mdb_write_data(db, data_ptr, value,
+                                                    new_value_size);
+    STAT_CHECK_RET(data_write_status, {
+                     (void)mdb_data_free(db, data_ptr, new_value_size);
+                     (void)mdb_index_free(db, index_ptr);
+                   });
+    mdb_status_t index_write_status = mdb_write_index(db, index_ptr, key,
+                                                      data_ptr, new_value_size);
+    STAT_CHECK_RET(index_write_status, {
+                     (void)mdb_data_free(db, data_ptr, new_value_size);
+                     (void)mdb_index_free(db, index_ptr);
+                   });
+    mdb_status_t bucket_write_status = mdb_write_bucket(db, bucket, index_ptr);
+    STAT_CHECK_RET(bucket_write_status, {
+                     (void)mdb_data_free(db, data_ptr, new_value_size);
+                     (void)mdb_index_free(db, index_ptr);
+                     (void)mdb_write_bucket(db, bucket, 0);
+                   });
   }
 
   uint32_t next_ptr;
-  char *key_buffer = (char*)malloc(db->options.key_size_max + 1);
+  char key_buffer[db->options.key_size_max + 1];
   mdb_ptr_t value_ptr;
   mdb_size_t value_size;
   mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
@@ -167,7 +192,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
 
   mdb_ptr_t save_ptr = ptr;
   ptr = next_ptr;
-  while (strcpy(key_buffer, key) != 0 && ptr != 0) {
+  while (strcmp(key_buffer, key) != 0 && ptr != 0) {
     read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
                                  &value_ptr, &value_size);
     STAT_CHECK_RET(read_status, {free(key_buffer);})
@@ -247,6 +272,17 @@ static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
   }
   if (fread(valsize, MDB_DATALEN_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read value length");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
+static mdb_status_t mdb_write_bucket(mdb_int_t *db, mdb_ptr_t bucket,
+                                     mdb_ptr_t value) {
+  if (fseek(db->fp_index, bucket, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
+  }
+  if (fwrite(&value, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write bucket");
   }
   return mdb_status(MDB_OK, NULL);
 }
