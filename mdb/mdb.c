@@ -25,6 +25,13 @@ typedef struct {
   uint32_t index_record_size;
 } mdb_int_t;
 
+typedef struct {
+  mdb_ptr_t next_ptr;
+  mdb_ptr_t value_ptr;
+  mdb_size_t value_size;
+  char key[0];
+} mdb_index_t;
+
 static mdb_status_t mdb_status(uint8_t code, const char *desc);
 static mdb_int_t *mdb_alloc(void);
 static void mdb_free(mdb_int_t *db);
@@ -33,8 +40,7 @@ static uint32_t mdb_hash(const char *key);
 static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
                                     mdb_ptr_t *ptr);
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
-                                   mdb_ptr_t *nextptr, char *keybuf,
-                                   mdb_ptr_t *valptr, mdb_size_t *valsize);
+                                   mdb_index_t *index);
 static mdb_status_t mdb_write_bucket(mdb_int_t *db, mdb_ptr_t bucket,
                                      mdb_ptr_t value);
 static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
@@ -112,29 +118,23 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
 
-  mdb_ptr_t next_ptr;
-  char *key_buffer = (char*)malloc(db->options.key_size_max + 1);
-  mdb_ptr_t value_ptr;
-  mdb_size_t value_size;
+  mdb_index_t *index =
+      alloca(sizeof(mdb_index_t) + db->options.key_size_max + 1);
 
-  mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
-                                            &value_ptr, &value_size);
-  STAT_CHECK_RET(read_status, { free(key_buffer); })
+  mdb_status_t read_status = mdb_read_index(db, ptr, index);
+  STAT_CHECK_RET(read_status, {;});
 
-  while (strcpy(key_buffer, key) != 0 && ptr != 0) {
-    read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
-                                 &value_ptr, &value_size);
-    STAT_CHECK_RET(read_status, { free(key_buffer); })
-    ptr = next_ptr;
+  while (strcmp(index->key, key) != 0 && ptr != 0) {
+    read_status = mdb_read_index(db, ptr, index);
+    STAT_CHECK_RET(read_status, {;});
+    ptr = index->next_ptr;
   }
 
-  if (next_ptr == 0) {
-    free(key_buffer);
+  if (index->next_ptr == 0) {
     return mdb_status(MDB_NO_KEY, "Key not found");
   }
 
-  free(key_buffer);
-  return mdb_read_data(db, value_ptr, value_size, buf, bufsiz);
+  return mdb_read_data(db, index->value_ptr, index->value_size, buf, bufsiz);
 }
 
 mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
@@ -182,28 +182,25 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
                    });
   }
 
-  uint32_t next_ptr;
-  char key_buffer[db->options.key_size_max + 1];
-  mdb_ptr_t value_ptr;
-  mdb_size_t value_size;
-  mdb_status_t read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
-                                            &value_ptr, &value_size);
-  STAT_CHECK_RET(read_status, {free(key_buffer);})
+  mdb_index_t *read_index =
+      alloca(sizeof(mdb_index_t) + db->options.key_size_max + 1);
+
+  mdb_status_t read_status = mdb_read_index(db, ptr, read_index);
+  STAT_CHECK_RET(read_status, {;});
 
   mdb_ptr_t save_ptr = ptr;
-  ptr = next_ptr;
-  while (strcmp(key_buffer, key) != 0 && ptr != 0) {
-    read_status = mdb_read_index(db, ptr, &next_ptr, key_buffer,
-                                 &value_ptr, &value_size);
-    STAT_CHECK_RET(read_status, {free(key_buffer);})
+  ptr = read_index->next_ptr;
+  while (strcmp(read_index->key, key) != 0 && ptr != 0) {
+    read_status = mdb_read_index(db, ptr, read_index);
+    STAT_CHECK_RET(read_status, {;});
     save_ptr = ptr;
-    ptr = next_ptr;
+    ptr = read_index->next_ptr;
   }
 
   if (ptr == 0) {
     mdb_ptr_t new_idx_ptr;
     mdb_status_t idx_alloc_status = mdb_index_alloc(db, &new_idx_ptr);
-    STAT_CHECK_RET(idx_alloc_status, {;})
+    STAT_CHECK_RET(idx_alloc_status, {;});
 
     mdb_ptr_t new_value_ptr;
     mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
@@ -212,15 +209,28 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
                      (void)mdb_index_free(db, new_idx_ptr);
                    });
 
-
+    mdb_status_t data_write_status = mdb_write_data(db, new_value_ptr, value,
+                                                    new_value_size);
+    STAT_CHECK_RET(data_write_status, {
+                     (void)mdb_index_free(db, new_idx_ptr);
+                     (void)mdb_data_free(db, new_value_ptr, new_value_size);
+                   });
+    mdb_status_t index_write_status = mdb_write_index(db, new_idx_ptr, key,
+                                                      new_value_ptr,
+                                                      new_value_size);
+    STAT_CHECK_RET(index_write_status, {
+                     (void)mdb_index_free(db, new_idx_ptr);
+                     (void)mdb_data_free(db, new_value_ptr, new_value_size);
+                   });
   } else {
-    mdb_status_t free_data_status = mdb_data_free(db, value_ptr, value_size);
-    STAT_CHECK_RET(free_data_status, {;})
+    mdb_status_t free_data_status = mdb_data_free(db, read_index->value_ptr,
+                                                  read_index->value_size);
+    STAT_CHECK_RET(free_data_status, {;});
 
     mdb_ptr_t data_ptr;
     mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
                                                     &data_ptr);
-    STAT_CHECK_RET(data_alloc_status, {;})
+    STAT_CHECK_RET(data_alloc_status, {;});
   }
 
   return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
@@ -255,23 +265,22 @@ static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
 }
 
 static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
-                                   mdb_ptr_t *nextptr, char *keybuf,
-                                   mdb_ptr_t *valptr, mdb_size_t *valsize) {
+                                   mdb_index_t *index) {
   if (fseek(db->fp_index, (long)idxptr, SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to ptr");
   }
-  if (fread(nextptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
+  if (fread(&(index->next_ptr), MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read next ptr");
   }
-  if (fread(keybuf, 1, db->options.key_size_max, db->fp_index)
+  if (fread(index->key, 1, db->options.key_size_max, db->fp_index)
       != db->options.key_size_max) {
     return mdb_status(MDB_ERR_READ, "cannot read key");
   }
-  keybuf[db->options.key_size_max] = '\0';
-  if (fread(valptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
+  index->key[db->options.key_size_max] = '\0';
+  if (fread(&(index->value_ptr), MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read value ptr");
   }
-  if (fread(valsize, MDB_DATALEN_SIZE, 1, db->fp_index) != 1) {
+  if (fread(&(index->value_size), MDB_DATALEN_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read value length");
   }
   return mdb_status(MDB_OK, NULL);
@@ -422,8 +431,10 @@ static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
     }
     mdb_ptr_t end_ptr = (mdb_ptr_t)ftell(db->fp_data);
 
-    if (end_ptr - start_ptr >= valsize) {
-      *ptr = start_ptr;
+    /// @todo currently we rely on the extra padding to keep correct results.
+    /// refactor and remove this padding sometime.
+    if (end_ptr - start_ptr >= valsize + 2) {
+      *ptr = start_ptr + 1;
       return mdb_status(MDB_OK, NULL);
     }
   }

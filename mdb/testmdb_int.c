@@ -92,21 +92,15 @@ void test1() {
   }
 
   for (size_t i = 0; i < 32; i++) {
-    char test_key[TESTDB_KEY_SIZE_MAX + 1];
-    mdb_ptr_t test_nextptr;
-    mdb_ptr_t test_valptr;
-    mdb_size_t test_valsize;
-
+    mdb_index_t *test_index =
+        alloca(sizeof(mdb_index_t) + TESTDB_KEY_SIZE_MAX + 1);
     mdb_status_t index_read_status = mdb_read_index(&testdb, idxptr_arr[i],
-                                                   &test_nextptr,
-                                                   test_key,
-                                                   &test_valptr,
-                                                   &test_valsize);
+                                                    test_index);
     VK_ASSERT_EQUALS(MDB_OK, index_read_status.code);
 
-    VK_ASSERT_EQUALS_S(keys[i], test_key);
-    VK_ASSERT_EQUALS(valptr_arr[i], test_valptr);
-    VK_ASSERT_EQUALS(valsize_arr[i], test_valsize);
+    VK_ASSERT_EQUALS_S(keys[i], test_index->key);
+    VK_ASSERT_EQUALS(valptr_arr[i], test_index->value_ptr);
+    VK_ASSERT_EQUALS(valsize_arr[i], test_index->value_size);
   }
 
   VK_TEST_SECTION_END("simple index write");
@@ -195,39 +189,28 @@ void test3() {
       continue;
     }
 
-    char test_key[TESTDB_KEY_SIZE_MAX + 1];
-    mdb_ptr_t test_nextptr;
-    mdb_ptr_t test_valptr;
-    mdb_size_t test_valsize;
-
+    mdb_index_t *test_index =
+        alloca(sizeof(mdb_index_t) + TESTDB_KEY_SIZE_MAX + 1);
     mdb_status_t index_read_status = mdb_read_index(&testdb, idxptr_arr[i],
-                                                   &test_nextptr,
-                                                   test_key,
-                                                   &test_valptr,
-                                                   &test_valsize);
+                                                    test_index);
+
     VK_ASSERT_EQUALS(MDB_OK, index_read_status.code);
 
-    VK_ASSERT_EQUALS_S(keys[i], test_key);
-    VK_ASSERT_EQUALS(valptr_arr[i], test_valptr);
-    VK_ASSERT_EQUALS(valsize_arr[i], test_valsize);
+    VK_ASSERT_EQUALS_S(keys[i], test_index->key);
+    VK_ASSERT_EQUALS(valptr_arr[i], test_index->value_ptr);
+    VK_ASSERT_EQUALS(valsize_arr[i], test_index->value_size);
   }
 
   for (size_t i = 0; i < 8; i++) {
-    char test_key[TESTDB_KEY_SIZE_MAX + 1];
-    mdb_ptr_t test_nextptr;
-    mdb_ptr_t test_valptr;
-    mdb_size_t test_valsize;
-
+    mdb_index_t *test_index =
+        alloca(sizeof(mdb_index_t) + TESTDB_KEY_SIZE_MAX + 1);
     mdb_status_t index_read_status = mdb_read_index(&testdb, new_idxptr_arr[i],
-                                                    &test_nextptr,
-                                                    test_key,
-                                                    &test_valptr,
-                                                    &test_valsize);
+                                                    test_index);
     VK_ASSERT_EQUALS(MDB_OK, index_read_status.code);
 
-    VK_ASSERT_EQUALS_S(new_keys[i], test_key);
-    VK_ASSERT_EQUALS(new_valptr_arr[i], test_valptr);
-    VK_ASSERT_EQUALS(new_valsize_arr[i], test_valsize);
+    VK_ASSERT_EQUALS_S(new_keys[i], test_index->key);
+    VK_ASSERT_EQUALS(new_valptr_arr[i], test_index->value_ptr);
+    VK_ASSERT_EQUALS(new_valsize_arr[i], test_index->value_size);
   }
 
   fprintf(stderr, "file size = %lu\n", mdb_index_size((mdb_t*)&testdb));
@@ -249,7 +232,7 @@ void test4() {
   mdb_ptr_t valptr_arr[32];
   mdb_size_t valsize_arr[32];
 
-  char buffer[64 + 32 + 1];
+  char buffer[64 + 32 + 1] = {0};
   for (size_t i = 0; i < 32; i++) {
     memset(buffer, i + 1, 64 + 32);
     valsize_arr[i] = rand() % 64 + 32;
@@ -315,7 +298,9 @@ int main() {
   test1();
   test2();
   test3();
-  test4();
+  for (size_t i = 0; i < 8; i++) {
+    test4();
+  }
 
   VK_TEST_END;
 
