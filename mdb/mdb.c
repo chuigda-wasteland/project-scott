@@ -51,6 +51,11 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
                                   mdb_size_t bufsiz);
 static mdb_status_t mdb_write_data(mdb_int_t *db, mdb_ptr_t valptr,
                                    const char *valbuf, mdb_size_t valsize);
+static mdb_status_t mdb_read_nextptr(mdb_int_t *db, mdb_ptr_t idxptr,
+                                     mdb_ptr_t *nextptr);
+static mdb_status_t mdb_write_nextptr(mdb_int_t *db, mdb_ptr_t ptr,
+                                      mdb_ptr_t nextptr);
+static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr);
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr);
 static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
                                    mdb_ptr_t *ptr);
@@ -140,100 +145,75 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
 mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
   mdb_int_t *db = (mdb_int_t*)handle;
   mdb_size_t bucket = mdb_hash(key) % db->options.hash_buckets;
-  mdb_size_t new_key_size = strlen(key);
-  if (new_key_size > db->options.key_size_max) {
+  mdb_size_t key_size = strlen(key);
+  if (key_size > db->options.key_size_max) {
     return mdb_status(MDB_ERR_KEY_SIZE, "key size too large");
   }
-  mdb_size_t new_value_size = strlen(value);
-  if (new_value_size > db->options.data_size_max) {
+  mdb_size_t value_size = strlen(value);
+  if (value_size > db->options.data_size_max) {
     return mdb_status(MDB_ERR_VALUE_SIZE, "value size too large");
   }
 
+  uint32_t save_ptr = bucket;
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
 
+  mdb_index_t *index = alloca(sizeof(mdb_index_t)
+                              + db->options.key_size_max + 1);
+  while (ptr != 0) {
+    mdb_status_t index_read_status = mdb_read_index(db, ptr, index);
+    STAT_CHECK_RET(index_read_status, {;});
+    if (strcmp(index->key, key) == 0) {
+      break;
+    }
+    save_ptr = ptr;
+    ptr = index->next_ptr;
+  }
+
   if (ptr == 0) {
     mdb_ptr_t index_ptr;
     mdb_status_t index_alloc_status = mdb_index_alloc(db, &index_ptr);
-    mdb_ptr_t data_ptr;
     STAT_CHECK_RET(index_alloc_status, {;});
-    mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
-                                                    &data_ptr);
-    STAT_CHECK_RET(data_alloc_status, { (void)mdb_index_free(db, index_ptr); });
-
-    mdb_status_t data_write_status = mdb_write_data(db, data_ptr, value,
-                                                    new_value_size);
+    mdb_ptr_t value_ptr;
+    mdb_status_t data_alloc_status = mdb_data_alloc(db, value_size, &value_ptr);
+    STAT_CHECK_RET(data_alloc_status, {
+                     (void)mdb_index_free(db, index_ptr);
+                   });
+    mdb_status_t data_write_status = mdb_write_data(db, value_ptr, value,
+                                                    value_size);
     STAT_CHECK_RET(data_write_status, {
-                     (void)mdb_data_free(db, data_ptr, new_value_size);
+                     (void)mdb_data_free(db, value_ptr, value_size);
                      (void)mdb_index_free(db, index_ptr);
                    });
     mdb_status_t index_write_status = mdb_write_index(db, index_ptr, key,
-                                                      data_ptr, new_value_size);
+                                                      value_ptr, value_size);
     STAT_CHECK_RET(index_write_status, {
-                     (void)mdb_data_free(db, data_ptr, new_value_size);
+                     (void)mdb_data_free(db, value_ptr, value_size);
                      (void)mdb_index_free(db, index_ptr);
                    });
-    mdb_status_t bucket_write_status = mdb_write_bucket(db, bucket, index_ptr);
-    STAT_CHECK_RET(bucket_write_status, {
-                     (void)mdb_data_free(db, data_ptr, new_value_size);
+    mdb_status_t ptr_update_status = mdb_write_nextptr(db, save_ptr, index_ptr);
+    STAT_CHECK_RET(ptr_update_status, {
+                     (void)mdb_data_free(db, value_ptr, value_size);
                      (void)mdb_index_free(db, index_ptr);
-                     (void)mdb_write_bucket(db, bucket, 0);
                    });
-  }
-
-  mdb_index_t *read_index =
-      alloca(sizeof(mdb_index_t) + db->options.key_size_max + 1);
-
-  mdb_status_t read_status = mdb_read_index(db, ptr, read_index);
-  STAT_CHECK_RET(read_status, {;});
-
-  mdb_ptr_t save_ptr = ptr;
-  ptr = read_index->next_ptr;
-  while (strcmp(read_index->key, key) != 0 && ptr != 0) {
-    read_status = mdb_read_index(db, ptr, read_index);
-    STAT_CHECK_RET(read_status, {;});
-    save_ptr = ptr;
-    ptr = read_index->next_ptr;
-  }
-
-  if (ptr == 0) {
-    mdb_ptr_t new_idx_ptr;
-    mdb_status_t idx_alloc_status = mdb_index_alloc(db, &new_idx_ptr);
-    STAT_CHECK_RET(idx_alloc_status, {;});
-
-    mdb_ptr_t new_value_ptr;
-    mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
-                                                    &new_value_ptr);
-    STAT_CHECK_RET(data_alloc_status, {
-                     (void)mdb_index_free(db, new_idx_ptr);
-                   });
-
-    mdb_status_t data_write_status = mdb_write_data(db, new_value_ptr, value,
-                                                    new_value_size);
-    STAT_CHECK_RET(data_write_status, {
-                     (void)mdb_index_free(db, new_idx_ptr);
-                     (void)mdb_data_free(db, new_value_ptr, new_value_size);
-                   });
-    mdb_status_t index_write_status = mdb_write_index(db, new_idx_ptr, key,
-                                                      new_value_ptr,
-                                                      new_value_size);
-    STAT_CHECK_RET(index_write_status, {
-                     (void)mdb_index_free(db, new_idx_ptr);
-                     (void)mdb_data_free(db, new_value_ptr, new_value_size);
-                   });
+    return mdb_status(MDB_OK, NULL);
   } else {
-    mdb_status_t free_data_status = mdb_data_free(db, read_index->value_ptr,
-                                                  read_index->value_size);
-    STAT_CHECK_RET(free_data_status, {;});
-
-    mdb_ptr_t data_ptr;
-    mdb_status_t data_alloc_status = mdb_data_alloc(db, new_value_size,
-                                                    &data_ptr);
+    /// @todo errors are only handled roughly here, needs refinement
+    mdb_status_t data_free_status = mdb_data_free(db, index->value_ptr,
+                                                  index->value_size);
+    STAT_CHECK_RET(data_free_status, {;});
+    mdb_ptr_t value_ptr;
+    mdb_status_t data_alloc_status = mdb_data_alloc(db, value_size, &value_ptr);
     STAT_CHECK_RET(data_alloc_status, {;});
+    mdb_status_t data_write_status = mdb_write_data(db, value_ptr, value,
+                                                    value_size);
+    STAT_CHECK_RET(data_write_status, {;});
+    mdb_status_t index_write_status = mdb_write_index(db, ptr, key, value_ptr,
+                                                      value_size);
+    STAT_CHECK_RET(index_write_status, {;});
+    return mdb_status(MDB_OK, NULL);
   }
-
-  return mdb_status(MDB_ERR_UNIMPLEMENTED, NULL);
 }
 
 mdb_options_t mdb_get_options(mdb_t handle) {
@@ -347,6 +327,17 @@ static mdb_status_t mdb_read_data(mdb_int_t *db, mdb_ptr_t valptr,
   return mdb_status(MDB_OK, NULL);
 }
 
+static mdb_status_t mdb_write_nextptr(mdb_int_t *db, mdb_ptr_t ptr,
+                                      mdb_ptr_t nextptr) {
+  if (fseek(db->fp_index, (long)ptr, SEEK_SET) != 0) {
+    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
+  }
+  if (fwrite(&nextptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
+    return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
+  }
+  return mdb_status(MDB_OK, NULL);
+}
+
 static mdb_status_t mdb_write_data(mdb_int_t *db, mdb_ptr_t valptr,
                                    const char *valbuf, mdb_size_t valsize) {
   if (fseek(db->fp_data, (long)valptr, SEEK_SET) != 0) {
@@ -373,16 +364,6 @@ static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
   return mdb_status(MDB_OK, NULL);
 }
 
-static mdb_status_t mdb_update_freeptr(mdb_int_t *db, mdb_ptr_t new_freeptr) {
-  if (fseek(db->fp_index, 0, SEEK_SET) != 0) {
-    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
-  }
-  if (fwrite(&new_freeptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
-    return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
-  }
-  return mdb_status(MDB_OK, NULL);
-}
-
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
   if (fseek(db->fp_index, 0, SEEK_SET) < 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
@@ -398,7 +379,7 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
     mdb_status_t nextptr_read_stat =
         mdb_read_nextptr(db, freeptr, &new_freeptr);
     STAT_CHECK_RET(nextptr_read_stat, {;});
-    mdb_status_t freeptr_update_stat = mdb_update_freeptr(db, new_freeptr);
+    mdb_status_t freeptr_update_stat = mdb_write_nextptr(db, 0, new_freeptr);
     STAT_CHECK_RET(freeptr_update_stat, {;});
     *ptr = freeptr;
     return mdb_status(MDB_OK, NULL);
