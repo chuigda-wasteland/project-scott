@@ -97,16 +97,85 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
 
   strcpy(pathbuf, path);
   strcat(pathbuf, ".db.index");
-  db->fp_index = fopen(pathbuf, "r+");
+  db->fp_index = fopen(pathbuf, "rb+");
   if (db->fp_index == NULL) {
+    fclose(db->fp_superblock);
     mdb_free(db);
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open index file as readwrite");
   }
 
   strcpy(pathbuf, path);
   strcat(pathbuf, ".db.data");
-  db->fp_data = fopen(pathbuf, "r+");
+  db->fp_data = fopen(pathbuf, "rb+");
+  if (db->fp_data == NULL) {
+    fclose(db->fp_superblock);
+    fclose(db->fp_index);
+    mdb_free(db);
+    return mdb_status(MDB_ERR_OPEN_FILE, "cannot open data file as readwrite");
+  }
+
+  *handle = (mdb_t)db;
+  return mdb_status(MDB_OK, NULL);
+}
+
+mdb_status_t mdb_create(mdb_t **handle, mdb_options_t options) {
+  mdb_int_t *db = mdb_alloc();
+  if (db == NULL) {
+    return mdb_status(MDB_ERR_ALLOC,
+                      "failed allocating memory buffer for database");
+  }
+
+  strcpy(pathbuf, options.db_name);
+  strcat(pathbuf, ".db.super");
+  db->fp_superblock = fopen(pathbuf, "w");
+  if (db->fp_superblock == NULL) {
+    mdb_free(db);
+    return mdb_status(MDB_ERR_OPEN_FILE,
+                      "cannot open superblock file as write");
+  }
+
+  fprintf(db->fp_superblock, "%s\n", db->db_name);
+  fprintf(db->fp_superblock, "%hu\n", db->options.key_size_max);
+  fprintf(db->fp_superblock, "%u\n", db->options.data_size_max);
+  fprintf(db->fp_superblock, "%u\n", db->options.hash_buckets);
+  fprintf(db->fp_superblock, "%u\n", db->options.items_max);
+
+  if (ferror(db->fp_superblock)) {
+    mdb_free(db);
+    return mdb_status(MDB_ERR_WRITE, "write error when writing superblock");
+  }
+
+  strcpy(pathbuf, options.db_name);
+  strcat(pathbuf, ".db.index");
+  db->fp_index = fopen(pathbuf, "rb+");
   if (db->fp_index == NULL) {
+    fclose(db->fp_superblock);
+    mdb_free(db);
+    return mdb_status(MDB_ERR_OPEN_FILE, "cannot open index file as readwrite");
+  }
+
+  mdb_ptr_t zero_ptr = 0;
+  if (fwrite(&zero_ptr, sizeof(mdb_ptr_t), 1, db->fp_index) < 1) {
+    fclose(db->fp_superblock);
+    fclose(db->fp_index);
+    mdb_free(db);
+    return mdb_status(MDB_ERR_WRITE, "write error when writing freeptr");
+  }
+  for (size_t i = 0; i < options.hash_buckets; i++) {
+    if (fwrite(&zero_ptr, sizeof(mdb_ptr_t), 1, db->fp_index) < 1) {
+      fclose(db->fp_superblock);
+      fclose(db->fp_index);
+      mdb_free(db);
+      return mdb_status(MDB_ERR_WRITE, "write error when writing hash buckets");
+    }
+  }
+
+  strcpy(pathbuf, options.db_name);
+  strcat(pathbuf, ".db.data");
+  db->fp_data = fopen(pathbuf, "rb+");
+  if (db->fp_data == NULL) {
+    fclose(db->fp_superblock);
+    fclose(db->fp_index);
     mdb_free(db);
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open data file as readwrite");
   }
