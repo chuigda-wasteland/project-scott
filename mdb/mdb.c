@@ -5,6 +5,8 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include <errno.h>
+
 typedef uint32_t mdb_size_t;
 typedef uint32_t mdb_ptr_t;
 
@@ -99,7 +101,6 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
   strcat(pathbuf, ".db.index");
   db->fp_index = fopen(pathbuf, "rb+");
   if (db->fp_index == NULL) {
-    fclose(db->fp_superblock);
     mdb_free(db);
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open index file as readwrite");
   }
@@ -108,8 +109,6 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
   strcat(pathbuf, ".db.data");
   db->fp_data = fopen(pathbuf, "rb+");
   if (db->fp_data == NULL) {
-    fclose(db->fp_superblock);
-    fclose(db->fp_index);
     mdb_free(db);
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open data file as readwrite");
   }
@@ -118,7 +117,7 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
   return mdb_status(MDB_OK, NULL);
 }
 
-mdb_status_t mdb_create(mdb_t **handle, mdb_options_t options) {
+mdb_status_t mdb_create(mdb_t *handle, mdb_options_t options) {
   mdb_int_t *db = mdb_alloc();
   if (db == NULL) {
     return mdb_status(MDB_ERR_ALLOC,
@@ -147,24 +146,19 @@ mdb_status_t mdb_create(mdb_t **handle, mdb_options_t options) {
 
   strcpy(pathbuf, options.db_name);
   strcat(pathbuf, ".db.index");
-  db->fp_index = fopen(pathbuf, "rb+");
+  db->fp_index = fopen(pathbuf, "wb+");
   if (db->fp_index == NULL) {
-    fclose(db->fp_superblock);
     mdb_free(db);
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open index file as readwrite");
   }
 
   mdb_ptr_t zero_ptr = 0;
   if (fwrite(&zero_ptr, sizeof(mdb_ptr_t), 1, db->fp_index) < 1) {
-    fclose(db->fp_superblock);
-    fclose(db->fp_index);
     mdb_free(db);
     return mdb_status(MDB_ERR_WRITE, "write error when writing freeptr");
   }
   for (size_t i = 0; i < options.hash_buckets; i++) {
     if (fwrite(&zero_ptr, sizeof(mdb_ptr_t), 1, db->fp_index) < 1) {
-      fclose(db->fp_superblock);
-      fclose(db->fp_index);
       mdb_free(db);
       return mdb_status(MDB_ERR_WRITE, "write error when writing hash buckets");
     }
@@ -172,14 +166,17 @@ mdb_status_t mdb_create(mdb_t **handle, mdb_options_t options) {
 
   strcpy(pathbuf, options.db_name);
   strcat(pathbuf, ".db.data");
-  db->fp_data = fopen(pathbuf, "rb+");
+  db->fp_data = fopen(pathbuf, "wb+");
   if (db->fp_data == NULL) {
-    fclose(db->fp_superblock);
-    fclose(db->fp_index);
     mdb_free(db);
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open data file as readwrite");
   }
 
+  strcpy(db->options.db_name, options.db_name);
+  db->options.items_max = options.items_max;
+  db->options.hash_buckets = options.hash_buckets;
+  db->options.key_size_max = options.key_size_max;
+  db->options.data_size_max = options.data_size_max;
   *handle = (mdb_t)db;
   return mdb_status(MDB_OK, NULL);
 }
@@ -582,4 +579,13 @@ static uint32_t mdb_hash(const char *key) {
     ret += (uint32_t)*key * i;
   }
   return ret;
+}
+
+void mdb_close(mdb_t handle) {
+  mdb_int_t *db = (mdb_int_t*)handle;
+  fclose(db->fp_superblock);
+  fclose(db->fp_index);
+  fclose(db->fp_data);
+  free(db->db_name);
+  free(db);
 }
