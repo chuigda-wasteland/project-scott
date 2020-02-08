@@ -113,6 +113,11 @@ mdb_status_t mdb_open(mdb_t *handle, const char *path) {
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open data file as readwrite");
   }
 
+  if (fflush(NULL) != 0) {
+    mdb_free(db);
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
+  }
+
   *handle = (mdb_t)db;
   return mdb_status(MDB_OK, NULL);
 }
@@ -172,6 +177,11 @@ mdb_status_t mdb_create(mdb_t *handle, mdb_options_t options) {
     return mdb_status(MDB_ERR_OPEN_FILE, "cannot open data file as readwrite");
   }
 
+  if (fflush(NULL) != 0) {
+    mdb_free(db);
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
+  }
+
   strcpy(db->options.db_name, options.db_name);
   db->options.items_max = options.items_max;
   db->options.hash_buckets = options.hash_buckets;
@@ -201,7 +211,7 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
     ptr = index->next_ptr;
   }
 
-  if (index->next_ptr == 0) {
+  if (ptr == 0) {
     return mdb_status(MDB_NO_KEY, "Key not found");
   }
 
@@ -220,7 +230,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
     return mdb_status(MDB_ERR_VALUE_SIZE, "value size too large");
   }
 
-  uint32_t save_ptr = bucket;
+  uint32_t save_ptr = MDB_PTR_SIZE * (bucket + 1);
   uint32_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
@@ -301,10 +311,10 @@ size_t mdb_data_size(mdb_t *handle) {
 
 static mdb_status_t mdb_read_bucket(mdb_int_t *db, uint32_t bucket,
                                     mdb_ptr_t *ptr) {
-  if (fseek(db->fp_index, (long)((bucket + 1) * MDB_PTR_SIZE), SEEK_SET) != 0) {
+  if (fseek(db->fp_index, (long)(MDB_PTR_SIZE * (bucket + 1)), SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
   }
-  if (fread(&ptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
+  if (fread(ptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_READ, "cannot read bucket");
   }
   return mdb_status(MDB_OK, NULL);
@@ -334,11 +344,14 @@ static mdb_status_t mdb_read_index(mdb_int_t *db, mdb_ptr_t idxptr,
 
 static mdb_status_t mdb_write_bucket(mdb_int_t *db, mdb_ptr_t bucket,
                                      mdb_ptr_t value) {
-  if (fseek(db->fp_index, bucket, SEEK_SET) != 0) {
+  if (fseek(db->fp_index, (long)(MDB_PTR_SIZE * (bucket + 1)), SEEK_SET) != 0) {
     return mdb_status(MDB_ERR_SEEK, "cannot seek to bucket");
   }
   if (fwrite(&value, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write bucket");
+  }
+  if (fflush(db->fp_index) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
   }
   return mdb_status(MDB_OK, NULL);
 }
@@ -362,6 +375,9 @@ static mdb_status_t mdb_write_index(mdb_int_t *db, mdb_ptr_t idxptr,
   }
   if (fwrite(&valsize, MDB_DATALEN_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to value part of index");
+  }
+  if (fflush(db->fp_index) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
   }
   return mdb_status(MDB_OK, NULL);
 }
@@ -401,6 +417,9 @@ static mdb_status_t mdb_write_nextptr(mdb_int_t *db, mdb_ptr_t ptr,
   if (fwrite(&nextptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to head of index file");
   }
+  if (fflush(db->fp_index) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
+  }
   return mdb_status(MDB_OK, NULL);
 }
 
@@ -411,6 +430,9 @@ static mdb_status_t mdb_write_data(mdb_int_t *db, mdb_ptr_t valptr,
   }
   if (fwrite(valbuf, 1, valsize, db->fp_data) < valsize) {
     return mdb_status(MDB_ERR_WRITE, "cannot write data");
+  }
+  if (fflush(db->fp_data) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
   }
   return mdb_status(MDB_OK, NULL);
 }
@@ -426,6 +448,9 @@ static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
     if (fwrite(&zero, 1, 1, db->fp_index) < 1) {
       return mdb_status(MDB_ERR_WRITE, "cannot stretch index file");
     }
+  }
+  if (fflush(db->fp_index) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
   }
   return mdb_status(MDB_OK, NULL);
 }
@@ -493,6 +518,9 @@ static mdb_status_t mdb_data_alloc(mdb_int_t *db, mdb_size_t valsize,
       return mdb_status(MDB_ERR_WRITE, "cannot stretch data file");
     }
   }
+  if (fflush(db->fp_data) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
+  }
   *ptr = end_ptr;
   return mdb_status(MDB_OK, NULL);
 }
@@ -521,6 +549,10 @@ static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to ptr");
   }
 
+  if (fflush(db->fp_index) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
+  }
+
   return mdb_status(MDB_OK, NULL);
 }
 
@@ -534,6 +566,9 @@ static mdb_status_t mdb_data_free(mdb_int_t *db, mdb_ptr_t valptr,
     if (fwrite(&zero, 1, 1, db->fp_data) != 1) {
       return mdb_status(MDB_ERR_WRITE, "cannot write empty data");
     }
+  }
+  if (fflush(db->fp_data) != 0) {
+    return mdb_status(MDB_ERR_FLUSH, "fflush failed");
   }
   return mdb_status(MDB_OK, NULL);
 }
