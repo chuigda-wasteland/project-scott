@@ -129,6 +129,16 @@ mdb_status_t mdb_create(mdb_t *handle, mdb_options_t options) {
                       "failed allocating memory buffer for database");
   }
 
+  strcpy(db->options.db_name, options.db_name);
+  db->options.items_max = options.items_max;
+  db->options.hash_buckets = options.hash_buckets;
+  db->options.key_size_max = options.key_size_max;
+  db->options.data_size_max = options.data_size_max;
+
+  db->index_record_size = db->options.key_size_max
+                          + MDB_PTR_SIZE * 2
+                          + MDB_DATALEN_SIZE;
+
   strcpy(pathbuf, options.db_name);
   strcat(pathbuf, ".db.super");
   db->fp_superblock = fopen(pathbuf, "w");
@@ -158,12 +168,12 @@ mdb_status_t mdb_create(mdb_t *handle, mdb_options_t options) {
   }
 
   mdb_ptr_t zero_ptr = 0;
-  if (fwrite(&zero_ptr, sizeof(mdb_ptr_t), 1, db->fp_index) < 1) {
+  if (fwrite(&zero_ptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     mdb_free(db);
     return mdb_status(MDB_ERR_WRITE, "write error when writing freeptr");
   }
   for (size_t i = 0; i < options.hash_buckets; i++) {
-    if (fwrite(&zero_ptr, sizeof(mdb_ptr_t), 1, db->fp_index) < 1) {
+    if (fwrite(&zero_ptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
       mdb_free(db);
       return mdb_status(MDB_ERR_WRITE, "write error when writing hash buckets");
     }
@@ -182,11 +192,6 @@ mdb_status_t mdb_create(mdb_t *handle, mdb_options_t options) {
     return mdb_status(MDB_ERR_FLUSH, "fflush failed");
   }
 
-  strcpy(db->options.db_name, options.db_name);
-  db->options.items_max = options.items_max;
-  db->options.hash_buckets = options.hash_buckets;
-  db->options.key_size_max = options.key_size_max;
-  db->options.data_size_max = options.data_size_max;
   *handle = (mdb_t)db;
   return mdb_status(MDB_OK, NULL);
 }
@@ -195,7 +200,7 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   mdb_int_t *db = (mdb_int_t*)handle;
   mdb_size_t bucket = mdb_hash(key) % db->options.hash_buckets;
 
-  uint32_t ptr;
+  mdb_ptr_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
 
