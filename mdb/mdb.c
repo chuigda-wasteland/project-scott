@@ -241,7 +241,6 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
                               + db->options.key_size_max + 1);
   while (ptr != 0) {
     mdb_status_t index_read_status = mdb_read_index(db, ptr, index);
-    if (strcmp(key, "1B") == 0) fprintf(stderr, "PTR = %x\n", ptr);
     STAT_CHECK_RET(index_read_status, {;});
     if (strcmp(index->key, key) == 0) {
       break;
@@ -496,14 +495,9 @@ static mdb_status_t mdb_stretch_index_file(mdb_int_t *db, mdb_ptr_t *ptr) {
 }
 
 static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
-  if (fseek(db->fp_index, 0, SEEK_SET) < 0) {
-    return mdb_status(MDB_ERR_SEEK, "cannot seek to head of index file");
-  }
   mdb_ptr_t freeptr;
-
-  if (fread(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) != 1) {
-    return mdb_status(MDB_ERR_READ, "cannot read free ptr");
-  }
+  mdb_status_t freeptr_read_status = mdb_read_nextptr(db, 0, &freeptr);
+  STAT_CHECK_RET(freeptr_read_status, {;});
 
   if (freeptr != 0) {
     mdb_ptr_t new_freeptr;
@@ -512,6 +506,8 @@ static mdb_status_t mdb_index_alloc(mdb_int_t *db, mdb_ptr_t *ptr) {
     STAT_CHECK_RET(nextptr_read_stat, {;});
     mdb_status_t freeptr_update_stat = mdb_write_nextptr(db, 0, new_freeptr);
     STAT_CHECK_RET(freeptr_update_stat, {;});
+    mdb_status_t freeptr_cleanup_stat = mdb_write_nextptr(db, freeptr, 0);
+    STAT_CHECK_RET(freeptr_cleanup_stat, {;});
     *ptr = freeptr;
     return mdb_status(MDB_OK, NULL);
   } else {
@@ -587,6 +583,13 @@ static mdb_status_t mdb_index_free(mdb_int_t *db, mdb_ptr_t ptr) {
 
   if (fwrite(&freeptr, MDB_PTR_SIZE, 1, db->fp_index) < 1) {
     return mdb_status(MDB_ERR_WRITE, "cannot write to ptr");
+  }
+
+  for (size_t i = 0; i < db->options.key_size_max; i++) {
+    char zero = '\0';
+    if (fwrite(&zero, 1, 1, db->fp_index) < 1) {
+      return mdb_status(MDB_ERR_WRITE, "cannot clean key part of index");
+    }
   }
 
   if (fflush(db->fp_index) != 0) {

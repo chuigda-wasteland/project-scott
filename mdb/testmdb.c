@@ -250,40 +250,13 @@ delete_done:
   VK_TEST_SECTION_END("gabriel load test");
 }
 
-void cyclist_sample() {
-  mdb_options_t options;
-  options.db_name = "devilman";
-  options.key_size_max = 4;
-  options.data_size_max = 256;
-  options.hash_buckets = 16;
-  options.items_max = 166716;
-
-  mdb_t db;
-  (void)mdb_create(&db, options);
-
-  mdb_write(db, "A11C", "\x7c ADC");
-  mdb_write(db, "B11C", "\x7c TOP");
-  mdb_write(db, "C11C", "\x7a MID");
-  mdb_write(db, "D11C", "\x7d ELVIS");
-
-  mdb_delete(db, "A11C");
-  mdb_delete(db, "C11C");
-  mdb_write(db, "E11C", "\xcf NYMAR");
-  mdb_write(db, "F11C", "\xcf NYMAR");
-  mdb_write(db, "G11C", "\xcf NYMAR");
-
-  mdb_close(db);
-}
-
 int main() {
   VK_TEST_BEGIN;
 
-  // happy_test0();
-  // reopen_test1();
-  // load_test2();
-  // load_test3();
-
-  cyclist_sample();
+  happy_test0();
+  reopen_test1();
+  load_test2();
+  load_test3();
 
   VK_TEST_END;
 }
