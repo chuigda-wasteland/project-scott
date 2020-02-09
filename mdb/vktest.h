@@ -48,7 +48,8 @@ void __vk_maybe_terminate() {
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    fprintf(stderr, "Testing Assert(%s)... ", #condition); \
+    fprintf(stderr, "[%u] Testing Assert(%s)... ", __g_all_tests_section, \
+            #condition); \
     if (condition) { \
       fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
@@ -64,7 +65,8 @@ void __vk_maybe_terminate() {
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    fprintf(stderr, "Testing AssertNot(%s)... ", #condition); \
+    fprintf(stderr, "[%u] Testing AssertNot(%s)... ", __g_all_tests_section, \
+            #condition); \
     if (!condition) { \
       fprintf(stderr, "Passing\n"); \
       __g_passing_tests++; \
@@ -80,7 +82,8 @@ void __vk_maybe_terminate() {
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
+    fprintf(stderr, "[%u] Testing AssertEquals(%s, %s)... ", \
+            __g_all_tests_section, \
             #standard, #expr); \
     if ((standard) == (expr)) { \
       fprintf(stderr, "Passing\n"); \
@@ -97,7 +100,8 @@ void __vk_maybe_terminate() {
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    fprintf(stderr, "Testing AssertEquals(\"%s\", \"%s\")... ",\
+    fprintf(stderr, "[%u] Testing AssertEquals(\"%s\", \"%s\")... ",\
+            __g_all_tests_section, \
             standard, expr); \
     if (!strcmp(standard, expr)) { \
       fprintf(stderr, "Passing\n"); \
@@ -116,7 +120,8 @@ void __vk_maybe_terminate() {
   { \
     __g_all_tests++; \
     __g_all_tests_section++; \
-    fprintf(stderr, "Testing AssertEquals(%s, %s)... ", \
+    fprintf(stderr, "[%u] Testing AssertEquals(%s, %s)... ", \
+            __g_all_tests_section, \
             #standard, #expr); \
     if (fabs((standard) - (expr)) <= VK_EPSILON) { \
       fprintf(stderr, "Passing\n"); \
@@ -133,7 +138,8 @@ void __vk_maybe_terminate() {
   { \
   __g_all_tests++; \
   __g_all_tests_section++; \
-  fprintf(stderr, "Testing AssertNotEquals(%s, %s)... ", \
+  fprintf(stderr, "[%u] Testing AssertNotEquals(%s, %s)... ", \
+          __g_all_tests_section, \
           #standard, #expr); \
     if ((standard) != (expr)) { \
       fprintf(stderr, "Passing\n"); \

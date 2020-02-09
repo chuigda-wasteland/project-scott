@@ -241,6 +241,7 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
                               + db->options.key_size_max + 1);
   while (ptr != 0) {
     mdb_status_t index_read_status = mdb_read_index(db, ptr, index);
+    if (strcmp(key, "1B") == 0) fprintf(stderr, "PTR = %x\n", ptr);
     STAT_CHECK_RET(index_read_status, {;});
     if (strcmp(index->key, key) == 0) {
       break;
