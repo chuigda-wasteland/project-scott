@@ -23,7 +23,7 @@ void happy_test0() {
   if (db_write_status.code != MDB_OK) {
     fprintf(stderr, "Error writing into database: E%d: %s\n",
             db_write_status.code,
-            db_write_status.desc ? db_create_status.desc : "(NULL)");
+            db_write_status.desc ? db_write_status.desc : "(NULL)");
     abort();
   }
 
@@ -37,6 +37,21 @@ void happy_test0() {
   }
 
   fprintf(stderr, "\"misakawa\" => \"%s\"\n", buffer);
+
+  mdb_status_t db_delete_status = mdb_delete(db, "misakawa");
+  if (db_delete_status.code != MDB_OK) {
+    fprintf(stderr, "Error deleting from database: E%d: %s\n",
+            db_delete_status.code,
+            db_delete_status.desc ? db_delete_status.desc : "(NULL)");
+  }
+
+  db_read_status = mdb_read(db, "misakawa", buffer, 257);
+  if (db_read_status.code != MDB_NO_KEY) {
+    fprintf(stderr, "Error reading from database: E%d: %s\n",
+            db_read_status.code,
+            db_read_status.desc ? db_create_status.desc : "(NULL)");
+    abort();
+  }
 
   mdb_close(db);
 }

@@ -230,8 +230,8 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
     return mdb_status(MDB_ERR_VALUE_SIZE, "value size too large");
   }
 
-  uint32_t save_ptr = MDB_PTR_SIZE * (bucket + 1);
-  uint32_t ptr;
+  mdb_ptr_t save_ptr = MDB_PTR_SIZE * (bucket + 1);
+  mdb_ptr_t ptr;
   mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
   STAT_CHECK_RET(bucket_read_status, {;});
 
@@ -290,6 +290,43 @@ mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
     STAT_CHECK_RET(index_write_status, {;});
     return mdb_status(MDB_OK, NULL);
   }
+}
+
+mdb_status_t mdb_delete(mdb_t handle, const char *key) {
+  mdb_int_t *db = (mdb_int_t*)handle;
+  mdb_size_t bucket = mdb_hash(key) % db->options.hash_buckets;
+
+  mdb_ptr_t save_ptr = MDB_PTR_SIZE * (bucket + 1);
+  mdb_ptr_t ptr;
+  mdb_status_t bucket_read_status = mdb_read_bucket(db, bucket, &ptr);
+  STAT_CHECK_RET(bucket_read_status, {;});
+
+  mdb_index_t *index = alloca(sizeof(mdb_index_t)
+                              + db->options.key_size_max + 1);
+  while (ptr != 0) {
+    mdb_status_t index_read_status = mdb_read_index(db, ptr, index);
+    STAT_CHECK_RET(index_read_status, {;});
+    if (strcmp(index->key, key) == 0) {
+      break;
+    }
+    save_ptr = ptr;
+    ptr = index->next_ptr;
+  }
+
+  if (ptr == 0) {
+    return mdb_status(MDB_NO_KEY, NULL);
+  }
+
+  mdb_status_t data_free_status = mdb_data_free(db, index->value_ptr,
+                                                index->value_size);
+  STAT_CHECK_RET(data_free_status, {;});
+  mdb_status_t index_free_status = mdb_index_free(db, ptr);
+  STAT_CHECK_RET(index_free_status, {;});
+  mdb_status_t nextptr_update_status = mdb_write_nextptr(db, save_ptr,
+                                                         index->next_ptr);
+  STAT_CHECK_RET(nextptr_update_status, {;});
+
+  return mdb_status(MDB_OK, NULL);
 }
 
 mdb_options_t mdb_get_options(mdb_t handle) {
