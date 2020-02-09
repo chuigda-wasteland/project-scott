@@ -267,7 +267,10 @@ void cyclist_sample() {
   mdb_write(db, "D11C", "\x7d ELVIS");
 
   mdb_delete(db, "A11C");
+  mdb_delete(db, "C11C");
   mdb_write(db, "E11C", "\xcf NYMAR");
+  mdb_write(db, "F11C", "\xcf NYMAR");
+  mdb_write(db, "G11C", "\xcf NYMAR");
 
   mdb_close(db);
 }
