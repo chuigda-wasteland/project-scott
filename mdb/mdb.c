@@ -207,20 +207,17 @@ mdb_status_t mdb_read(mdb_t handle, const char *key, char *buf, size_t bufsiz) {
   mdb_index_t *index =
       alloca(sizeof(mdb_index_t) + db->options.key_size_max + 1);
 
-  mdb_status_t read_status = mdb_read_index(db, ptr, index);
-  STAT_CHECK_RET(read_status, {;});
-
-  while (strcmp(index->key, key) != 0 && ptr != 0) {
-    read_status = mdb_read_index(db, ptr, index);
+  while (ptr != 0) {
+    mdb_status_t read_status = mdb_read_index(db, ptr, index);
     STAT_CHECK_RET(read_status, {;});
+    if (strcmp(index->key, key) == 0) {
+      return mdb_read_data(db, index->value_ptr, index->value_size, buf,
+                           bufsiz);
+    }
     ptr = index->next_ptr;
   }
 
-  if (ptr == 0) {
-    return mdb_status(MDB_NO_KEY, "Key not found");
-  }
-
-  return mdb_read_data(db, index->value_ptr, index->value_size, buf, bufsiz);
+  return mdb_status(MDB_NO_KEY, "Key not found");
 }
 
 mdb_status_t mdb_write(mdb_t handle, const char *key, const char *value) {
