@@ -49,14 +49,13 @@ impl LSMCacheManager {
         }
     }
 
-    fn add_cache(&mut self, file_name: String, cache: LSMBlockCache) {
-        let _ = self.lru.put(file_name, cache);
-    }
-
-    fn get_cache(&self, file_name: &String) -> Option<&LSMBlockCache> {
-        type LRU = LruCache<String, LSMBlockCache>;
-        unsafe {
-            ((&self.lru) as *const LRU as *mut LRU).as_mut().unwrap().get(file_name)
+    fn get_cache(&mut self, file_name: &String) -> &LSMBlockCache {
+        if self.lru.contains(file_name) {
+            self.lru.get(file_name).unwrap()
+        } else {
+            let new_cache = LSMBlockCache::new(file_name.to_string());
+            self.lru.put(file_name.to_string(), new_cache);
+            self.lru.get(file_name).unwrap()
         }
     }
 
@@ -80,16 +79,7 @@ impl LSMBlock {
 
     pub fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
         if key >= self.lower_bound.as_str() && key <= self.upper_bound.as_str() {
-            unsafe {
-                let cache_manager = cache_manager as *mut LSMCacheManager;
-                if let Some(cache) = cache_manager.as_mut().unwrap().get_cache(&self.block_file_name) {
-                    return cache.lookup(key);
-                }
-
-                let new_cache = LSMBlockCache::new(self.block_file_name.clone());
-                cache_manager.as_mut().unwrap().add_cache(self.block_file_name.clone(), new_cache);
-                cache_manager.as_ref().unwrap().get_cache(&self.block_file_name).unwrap().lookup(key)
-            }
+            cache_manager.get_cache(&self.block_file_name).lookup(key)
         } else {
             None
         }
