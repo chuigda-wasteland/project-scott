@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufReader, BufRead, Read};
+use std::io::{BufReader, BufRead};
 
 use lru::LruCache;
 

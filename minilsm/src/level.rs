@@ -3,6 +3,7 @@ use crate::cache::LSMCacheManager;
 use crate::metadata::ManifestUpdate;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use crate::KVPair;
 
 struct FileIdManager {
     current: u32
@@ -61,9 +62,9 @@ impl LSMLevel {
         #[derive(Eq, PartialEq)]
         struct HeapTriplet(String, String, usize);
 
-        impl PartialOrd for HeapTriplet {
-            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                Some({
+        impl Ord for HeapTriplet {
+            fn cmp(&self, other: &Self) -> Ordering {
+                {
                     let HeapTriplet(key1, _, block_idx1) = self;
                     let HeapTriplet(key2, _, block_idx2) = other;
                     match key1.cmp(key2) {
@@ -71,13 +72,13 @@ impl LSMLevel {
                         Ordering::Greater => Ordering::Greater,
                         Ordering::Less => Ordering::Less
                     }
-                }.reverse())
+                }.reverse()
             }
         }
 
-        impl Ord for HeapTriplet {
-            fn cmp(&self, other: &Self) -> Ordering {
-                self.partial_cmp(other).unwrap()
+        impl PartialOrd for HeapTriplet {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
             }
         }
 
@@ -85,7 +86,7 @@ impl LSMLevel {
         let mut blocks_built: Vec<LSMBlock> = Vec::new();
         let mut heap = BinaryHeap::new();
         for (i, iter) in iters.iter_mut().enumerate() {
-            if let Some((key, value)) = iter.next() {
+            if let Some(KVPair(key, value)) = iter.next() {
                 heap.push(HeapTriplet(key, value, i))
             }
         }
@@ -113,7 +114,7 @@ impl LSMLevel {
             }
 
             last_block_idx.replace(block_idx);
-            if let Some((key, value)) = iters[block_idx].next() {
+            if let Some(KVPair(key, value)) = iters[block_idx].next() {
                 heap.push(HeapTriplet(key, value, block_idx));
             }
         }
@@ -182,10 +183,7 @@ mod test {
     use crate::block::LSMBlock;
     use crate::level::{LSMLevel, FileIdManager};
     use crate::cache::LSMCacheManager;
-
-    fn kv_cmp(kv1: &(&str, &str), kv2: &(&str, &str)) -> std::cmp::Ordering {
-        kv1.0.cmp(kv2.0)
-    }
+    use crate::KVPair;
 
     #[test]
     fn test_level1_lookup() {
@@ -215,13 +213,13 @@ mod test {
                 ("ice1000", "1000")
             ]
         ];
-        data_pieces.iter_mut().for_each(|data| data.sort_by(kv_cmp));
         let blocks =
             data_pieces.into_iter().enumerate().map(|(i, vec)| {
-                let data =
+                let mut data =
                     vec.into_iter()
-                       .map(|(k, v)| (k.to_string(), v.to_string()))
+                       .map(|(k, v)| KVPair(k.to_string(), v.to_string()))
                        .collect::<Vec<_>>();
+                data.sort();
                 let block_file_name = format!("test_level1_lookup_{}.msst", i);
                 LSMBlock::create(block_file_name, data)
             }).collect::<Vec<_>>();
@@ -241,6 +239,11 @@ mod test {
 
     #[test]
     fn test_lvn_lookup() {
-        /// TODO it takes some time to build up testing data pieces
+        // TODO it takes some time to build up testing data pieces
+    }
+
+    #[test]
+    fn test_merge() {
+        // TODO it takes some time to build up testing data pieces
     }
 }

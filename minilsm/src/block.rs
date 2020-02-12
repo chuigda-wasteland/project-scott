@@ -3,6 +3,7 @@ use std::fs::File;
 use std::iter::FusedIterator;
 
 use crate::cache::LSMCacheManager;
+use crate::KVPair;
 
 pub struct LSMBlock {
     block_file_name: String,
@@ -23,7 +24,7 @@ impl LSMBlockIter {
 }
 
 impl Iterator for LSMBlockIter {
-    type Item = (String, String);
+    type Item = KVPair;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut buf = String::new();
@@ -33,7 +34,7 @@ impl Iterator for LSMBlockIter {
             } else {
                 let parts: Vec<_> = buf.trim().split(":").collect();
                 assert_eq!(parts.len(), 2);
-                Some((parts[0].to_string(), parts[1].to_string()))
+                Some(KVPair(parts[0].to_string(), parts[1].to_string()))
             }
         } else {
             panic!()
@@ -50,7 +51,7 @@ impl LSMBlock {
         }
     }
 
-    pub fn create(block_file_name: String, data: Vec<(String, String)>) -> Self {
+    pub fn create(block_file_name: String, data: Vec<KVPair>) -> Self {
         let lower_bound = data.first().unwrap().0.clone();
         let upper_bound = data.last().unwrap().0.clone();
 
@@ -92,6 +93,7 @@ impl LSMBlock {
 mod test {
     use crate::block::LSMBlock;
     use crate::cache::LSMCacheManager;
+    use crate::KVPair;
 
     #[test]
     fn test_build_sst() {
@@ -107,7 +109,7 @@ mod test {
         data.sort_by(|&(k1, _), &(k2, _)| k1.cmp(k2));
         let data =
             data.iter()
-                .map(|&(key, value)| (key.to_string(), value.to_string()))
+                .map(|&(key, value)| KVPair(key.to_string(), value.to_string()))
                 .collect::<Vec<_>>();
 
         let block = LSMBlock::create("test_build_sst.msst".to_string(), data);
@@ -127,11 +129,11 @@ mod test {
             ("MisakawaMikoto", "常盤台中学校"),
             ("KamijouTouma", "PERMISSION_DENIED"),
         ];
-        data.sort_by(|&(k1, _), &(k2, _)| k1.cmp(k2));
-        let data =
+        let mut data =
             data.iter()
-                .map(|&(key, value)| (key.to_string(), value.to_string()))
+                .map(|&(key, value)| KVPair(key.to_string(), value.to_string()))
                 .collect::<Vec<_>>();
+        data.sort();
         let block = LSMBlock::create("test_block_iter.msst".to_string(), data.clone());
         let block_iter = block.iter();
 
