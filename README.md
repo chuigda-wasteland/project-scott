@@ -5,4 +5,4 @@ A series of attemptations to find a disk storage data structure
 * memds -- in-memory data structure practice
 * uno -- arduino practice
 * mdb -- a reimplemented APUE DB in ANSI C
-* minibench -- a minimal benchmark-use single-threaded LSM tree
+* minilsm -- a minimal benchmark-use single-threaded LSM tree
