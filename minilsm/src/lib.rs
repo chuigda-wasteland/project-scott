@@ -1,11 +1,13 @@
 #![feature(with_options)]
 #![feature(drain_filter)]
 
-pub mod cache;
-pub mod block;
+mod cache;
+mod block;
+mod metadata;
 
 use cache::*;
 use block::*;
+use metadata::*;
 
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use std::fs::File;
@@ -47,23 +49,6 @@ struct LSMLevel {
     file_id_manager: FileIdManager
 }
 
-struct ManifestUpdate {
-    added_files: Vec<String>,
-    removed_files: Vec<String>
-}
-
-impl ManifestUpdate {
-    fn new(added_files: Vec<String>, removed_files: Vec<String>) -> Self {
-        ManifestUpdate { added_files, removed_files }
-    }
-}
-
-impl Default for ManifestUpdate {
-    fn default() -> Self {
-        ManifestUpdate::new(Vec::new(), Vec::new())
-    }
-}
-
 impl LSMLevel {
     fn new(level: u32, file_id_manager: FileIdManager) -> Self {
         LSMLevel { level, blocks: Vec::new(), file_id_manager }
@@ -76,7 +61,7 @@ impl LSMLevel {
     fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
         /// This piece of code should have been:
         /// ```no_run
-        /// use minilsm::LSMCacheManager;
+        /// use crate::cache::LSMCacheManager;
         /// fn t(cache_manager: &mut LSMCacheManager) -> Option<&str> {
         ///     for block in blocks {
         ///         if let Some(value) = block.get(key, cache_manager) {
@@ -189,7 +174,7 @@ impl LSMLevel {
             self_to_merge
                 .iter()
                 .chain(incoming_to_merge.iter())
-                .map(|block| block.block_file_name.clone())
+                .map(|block| block.block_file_name().to_string())
                 .collect::<Vec<_>>();
 
         self_to_merge.append(&mut incoming_to_merge);
@@ -205,7 +190,7 @@ impl LSMLevel {
         let added_files =
             new_blocks
                 .iter()
-                .map(|block| block.block_file_name.clone())
+                .map(|block| block.block_file_name().to_string())
                 .collect();
 
         let mut all_blocks = self_stand_still;

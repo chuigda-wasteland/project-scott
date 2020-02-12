@@ -4,17 +4,15 @@ use std::io::{BufReader, BufRead, Read};
 
 use lru::LruCache;
 
-pub(crate) struct LSMBlockCache {
+pub struct LSMBlockCache {
     block_file_name: String,
     data: BTreeMap<String, String>
 }
 
 impl LSMBlockCache {
-    fn new(block_file_name: String) -> Self {
+    pub fn new(block_file_name: String) -> Self {
         let file = File::with_options().read(true).open(&block_file_name).unwrap();
         let mut file = BufReader::new(file);
-        let mut s = String::new();
-        file.read_to_string(&mut s).unwrap();
 
         let mut ret = LSMBlockCache {
             block_file_name,
@@ -31,25 +29,25 @@ impl LSMBlockCache {
         ret
     }
 
-    pub(crate) fn lookup(&self, key: &str) -> Option<&str> {
+    pub fn lookup(&self, key: &str) -> Option<&str> {
         self.data.get(key).map(|s| s.as_str())
     }
 }
 
-pub(crate) struct LSMCacheManager {
+pub struct LSMCacheManager {
     lru: LruCache<String, LSMBlockCache>,
     max_cache_count: usize
 }
 
 impl LSMCacheManager {
-    fn new(max_cache_count: usize) -> Self {
+    pub fn new(max_cache_count: usize) -> Self {
         LSMCacheManager {
             lru: LruCache::new(max_cache_count),
             max_cache_count
         }
     }
 
-    pub(crate) fn get_cache(&mut self, file_name: &String) -> &LSMBlockCache {
+    pub fn get_cache(&mut self, file_name: &String) -> &LSMBlockCache {
         if self.lru.contains(file_name) {
             self.lru.get(file_name).unwrap()
         } else {
@@ -59,7 +57,15 @@ impl LSMCacheManager {
         }
     }
 
-    fn max_cache_count(&self) -> usize {
+    pub fn max_cache_count(&self) -> usize {
         self.max_cache_count
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_cached_read() {
+
     }
 }

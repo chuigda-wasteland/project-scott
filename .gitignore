@@ -12,6 +12,11 @@ Cargo.lock
 # C/C++ object files
 *.o
 
+# MiniLSM database files
+*.msst
+*.mfst
+*.mcrt
+
 # Intellij idea outputs
 memds/out
 memds/.idea
