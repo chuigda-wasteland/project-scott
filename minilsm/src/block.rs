@@ -31,7 +31,7 @@ impl Iterator for LSMBlockIter {
             if bytes_read == 0 {
                 None
             } else {
-                let parts: Vec<_> = buf.split(":").collect();
+                let parts: Vec<_> = buf.trim().split(":").collect();
                 assert_eq!(parts.len(), 2);
                 Some((parts[0].to_string(), parts[1].to_string()))
             }
@@ -114,5 +114,28 @@ mod test {
         let mut cache_manager = LSMCacheManager::new(10);
 
         assert_eq!(block.get("ice1000", &mut cache_manager).unwrap(), "PSU");
+    }
+
+    #[test]
+    fn test_block_iter() {
+        let mut data = vec![
+            ("Yifan ZHU", "CHUK(SZ)"),
+            ("ice1000", "PSU"),
+            ("ICEY", "QDU"),
+            ("Lyzh", "Railway Middle School"),
+            ("Accelerator", "長期コンピューター学校"),
+            ("MisakawaMikoto", "常盤台中学校"),
+            ("KamijouTouma", "PERMISSION_DENIED"),
+        ];
+        data.sort_by(|&(k1, _), &(k2, _)| k1.cmp(k2));
+        let data =
+            data.iter()
+                .map(|&(key, value)| (key.to_string(), value.to_string()))
+                .collect::<Vec<_>>();
+        let block = LSMBlock::create("test_block_iter.msst".to_string(), data.clone());
+        let block_iter = block.iter();
+
+        let iter_read_data = block_iter.collect::<Vec<_>>();
+        assert_eq!(iter_read_data, data);
     }
 }
