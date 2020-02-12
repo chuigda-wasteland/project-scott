@@ -1,12 +1,13 @@
 #![feature(with_options)]
 #![feature(drain_filter)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use std::fs::File;
 use std::io::{Read, BufReader, BufRead, Write};
 
 use lru::LruCache;
 use std::iter::FusedIterator;
+use std::cmp::Ordering;
 
 pub struct LSMBlockCache {
     block_file_name: String,
@@ -160,6 +161,12 @@ impl ManifestUpdate {
     }
 }
 
+impl Default for ManifestUpdate {
+    fn default() -> Self {
+        ManifestUpdate::new(Vec::new(), Vec::new())
+    }
+}
+
 impl LSMLevel {
     fn new(level: u32) -> Self {
         LSMLevel { level, blocks: Vec::new() }
@@ -190,25 +197,109 @@ impl LSMLevel {
         None
     }
 
+    fn merge_blocks_intern(iters: &mut Vec<(LSMBlockIter, i32)>) -> Vec<LSMBlock> {
+        #[derive(Eq, PartialEq)]
+        struct Quadlet(String, String, i32, usize);
+
+        impl PartialOrd for Quadlet {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some({
+                    let Quadlet(key1, _, level_id1, _) = self;
+                    let Quadlet(key2, _, level_id2, _) = other;
+                    match key1.cmp(key2) {
+                        Ordering::Equal => level_id1.cmp(level_id2),
+                        Ordering::Greater => Ordering::Greater,
+                        Ordering::Less => Ordering::Less
+                    }
+                })
+            }
+        }
+
+        impl Ord for Quadlet {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.partial_cmp(other).unwrap()
+            }
+        }
+
+        let mut buffer: Vec<(String, String)> = Vec::new();
+        let mut blocks_built = Vec::new();
+        let mut heap = BinaryHeap::new();
+        for (i, (iter, level_id)) in iters.iter_mut().enumerate() {
+            if let Some((key, value)) = iter.next() {
+                heap.push(Quadlet(key, value, *level_id, i))
+            }
+        }
+
+        let mut last_level = None;
+        while heap.len() > 0 {
+            let Trident(key, value, level, index) = heap.pop();
+            if let Some((last_key, _)) = buffer.last() {
+                if last_key == key {
+                    let last_level = last_level.unwrap();
+                    if level > last_level {
+                        let _ = buffer.pop();
+                        buffer.push((key, value));
+                    } else {
+                        /// Do nothing
+                    }
+                } else {
+                    buffer.push((key, value));
+                }
+            }
+
+            if buffer.len() >= 256 {
+                /// TODO implement block building
+                unimplemented!()
+            }
+
+            last_level.replace(level)
+        }
+
+        unimplemented!()
+    }
+
     fn merge_blocks(mut self, mut blocks: Vec<LSMBlock>) -> (LSMLevel, ManifestUpdate, bool) {
-        let self_to_merge =
-            self.blocks.drain_filter(|self_block| {
-                blocks.iter().any(|block| LSMBlock::intersect(block, self_block))
-            }).collect::<Vec<_>>();
+        if self.level == 1 {
+            self.blocks.append(&mut blocks);
+            let b = self.blocks.len() > 10;
+            return (self, ManifestUpdate::default(), b)
+        }
+
+        let mut self_to_merge =
+            self.blocks
+                .drain_filter(|self_block| {
+                    blocks.iter().any(|block| LSMBlock::intersect(block, self_block))
+                })
+                .map(|block| (block, 1))
+                .collect::<Vec<_>>();
         let self_stand_still = self.blocks;
 
-        let incoming_to_merge =
-            blocks.drain_filter(|block| {
-                self_to_merge.iter().any(|self_block| LSMBlock::intersect(block, self_block))
-            }).collect::<Vec<_>>();
+        let mut incoming_to_merge =
+            blocks
+                .drain_filter(|block| {
+                    self_to_merge.iter().any(|(self_block, _)| LSMBlock::intersect(block, self_block))
+                })
+                .map(|block| (block, 2))
+                .collect::<Vec<_>>();
         let incoming_stand_still = blocks;
 
         let removed_files =
             self_to_merge
                 .iter()
                 .chain(incoming_to_merge.iter())
-                .map(|block| block.block_file_name.clone())
+                .map(|(block, _)| block.block_file_name.clone())
                 .collect::<Vec<_>>();
+
+        self_to_merge.append(&mut incoming_to_merge);
+        drop(incoming_to_merge);
+
+        let merging_iters =
+            self_to_merge
+                .iter()
+                .map(|(block, levelid)| (block.iter(), levelid))
+                .collect::<Vec<_>>();
+
+
 
         unimplemented!()
     }
