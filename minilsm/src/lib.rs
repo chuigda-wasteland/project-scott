@@ -172,6 +172,10 @@ impl LSMLevel {
         LSMLevel { level, blocks: Vec::new() }
     }
 
+    fn with_blocks(level: u32, blocks: Vec<LSMBlock>) -> Self {
+        LSMLevel { level, blocks }
+    }
+
     fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
         /// This piece of code should have been:
         /// ```no_run
@@ -197,17 +201,17 @@ impl LSMLevel {
         None
     }
 
-    fn merge_blocks_intern(iters: &mut Vec<(LSMBlockIter, i32)>) -> Vec<LSMBlock> {
+    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>) -> Vec<LSMBlock> {
         #[derive(Eq, PartialEq)]
-        struct Quadlet(String, String, i32, usize);
+        struct HeapTriplet(String, String, usize);
 
-        impl PartialOrd for Quadlet {
+        impl PartialOrd for HeapTriplet {
             fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
                 Some({
-                    let Quadlet(key1, _, level_id1, _) = self;
-                    let Quadlet(key2, _, level_id2, _) = other;
+                    let HeapTriplet(key1, _, block_idx1) = self;
+                    let HeapTriplet(key2, _, block_idx2) = other;
                     match key1.cmp(key2) {
-                        Ordering::Equal => level_id1.cmp(level_id2),
+                        Ordering::Equal => block_idx1.cmp(block_idx2),
                         Ordering::Greater => Ordering::Greater,
                         Ordering::Less => Ordering::Less
                     }
@@ -215,47 +219,50 @@ impl LSMLevel {
             }
         }
 
-        impl Ord for Quadlet {
+        impl Ord for HeapTriplet {
             fn cmp(&self, other: &Self) -> Ordering {
                 self.partial_cmp(other).unwrap()
             }
         }
 
         let mut buffer: Vec<(String, String)> = Vec::new();
-        let mut blocks_built = Vec::new();
+        let mut blocks_built: Vec<LSMBlock> = Vec::new();
         let mut heap = BinaryHeap::new();
-        for (i, (iter, level_id)) in iters.iter_mut().enumerate() {
+        for (i, iter) in iters.iter_mut().enumerate() {
             if let Some((key, value)) = iter.next() {
-                heap.push(Quadlet(key, value, *level_id, i))
+                heap.push(HeapTriplet(key, value, i))
             }
         }
 
-        let mut last_level = None;
-        while heap.len() > 0 {
-            let Trident(key, value, level, index) = heap.pop();
+        let mut last_block_idx: Option<usize> = None;
+        while let Some(HeapTriplet(key, value, block_idx)) = heap.pop() {
             if let Some((last_key, _)) = buffer.last() {
-                if last_key == key {
-                    let last_level = last_level.unwrap();
-                    if level > last_level {
+                if *last_key == key {
+                    let last_block_idx = last_block_idx.unwrap();
+                    if block_idx > last_block_idx {
                         let _ = buffer.pop();
-                        buffer.push((key, value));
                     } else {
-                        /// Do nothing
+                        // Do nothing
                     }
                 } else {
-                    buffer.push((key, value));
+                    // Do nothing
                 }
             }
+            buffer.push((key, value));
 
             if buffer.len() >= 256 {
                 /// TODO implement block building
+                buffer.clear();
                 unimplemented!()
             }
 
-            last_level.replace(level)
+            last_block_idx.replace(block_idx);
+            if let Some((key, value)) = iters[block_idx].next() {
+                heap.push(HeapTriplet(key, value, block_idx));
+            }
         }
 
-        unimplemented!()
+        blocks_built
     }
 
     fn merge_blocks(mut self, mut blocks: Vec<LSMBlock>) -> (LSMLevel, ManifestUpdate, bool) {
@@ -270,24 +277,22 @@ impl LSMLevel {
                 .drain_filter(|self_block| {
                     blocks.iter().any(|block| LSMBlock::intersect(block, self_block))
                 })
-                .map(|block| (block, 1))
                 .collect::<Vec<_>>();
         let self_stand_still = self.blocks;
 
         let mut incoming_to_merge =
             blocks
                 .drain_filter(|block| {
-                    self_to_merge.iter().any(|(self_block, _)| LSMBlock::intersect(block, self_block))
+                    self_to_merge.iter().any(|self_block| LSMBlock::intersect(block, self_block))
                 })
-                .map(|block| (block, 2))
                 .collect::<Vec<_>>();
-        let incoming_stand_still = blocks;
+        let mut incoming_stand_still = blocks;
 
         let removed_files =
             self_to_merge
                 .iter()
                 .chain(incoming_to_merge.iter())
-                .map(|(block, _)| block.block_file_name.clone())
+                .map(|block| block.block_file_name.clone())
                 .collect::<Vec<_>>();
 
         self_to_merge.append(&mut incoming_to_merge);
@@ -296,12 +301,21 @@ impl LSMLevel {
         let merging_iters =
             self_to_merge
                 .iter()
-                .map(|(block, levelid)| (block.iter(), levelid))
+                .map(|block| block.iter())
                 .collect::<Vec<_>>();
 
+        let mut new_blocks = LSMLevel::merge_blocks_intern(merging_iters);
+        let added_files =
+            new_blocks
+                .iter()
+                .map(|block| block.block_file_name.clone())
+                .collect();
 
-
-        unimplemented!()
+        let mut all_blocks = self_stand_still;
+        all_blocks.append(&mut incoming_stand_still);
+        all_blocks.append(&mut new_blocks);
+        let b = all_blocks.len() >= 10usize.pow(self.level);
+        (LSMLevel::with_blocks(self.level, all_blocks), ManifestUpdate::new(added_files, removed_files), b)
     }
 }
 
