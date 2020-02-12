@@ -35,6 +35,12 @@ impl PartialOrd for KVPair {
     }
 }
 
+fn split2<T, F>(mut v: Vec<T>, f: F) -> (Vec<T>, Vec<T>)
+    where F: Fn(&mut T) -> bool {
+    let v1 = v.drain_filter(f).collect::<Vec<_>>();
+    (v1, v)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

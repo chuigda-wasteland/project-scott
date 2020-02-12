@@ -1,9 +1,10 @@
 use crate::block::{LSMBlock, LSMBlockIter};
 use crate::cache::LSMCacheManager;
 use crate::metadata::ManifestUpdate;
+use crate::{KVPair, split2};
+
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use crate::KVPair;
 
 struct FileIdManager {
     current: u32
@@ -122,28 +123,25 @@ impl LSMLevel {
         blocks_built
     }
 
-    fn merge_blocks(mut self, mut blocks: Vec<LSMBlock>) -> (LSMLevel, ManifestUpdate, bool) {
+    fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock>) -> (ManifestUpdate, bool) {
         if self.level == 1 {
             self.blocks.append(&mut blocks);
             let b = self.blocks.len() > 10;
-            return (self, ManifestUpdate::default(), b)
-        } else {}
+            return (ManifestUpdate::default(), b)
+        }
 
-        let mut self_to_merge =
-            self.blocks
-                .drain_filter(|self_block| {
-                    blocks.iter().any(|block| LSMBlock::intersect(block, self_block))
-                })
-                .collect::<Vec<_>>();
-        let self_stand_still = self.blocks;
+        let mut self_blocks = Vec::new();
+        self_blocks.append(&mut self.blocks);
 
-        let mut incoming_to_merge =
-            blocks
-                .drain_filter(|block| {
-                    self_to_merge.iter().any(|self_block| LSMBlock::intersect(block, self_block))
-                })
-                .collect::<Vec<_>>();
-        let mut incoming_stand_still = blocks;
+        let (mut self_to_merge, mut self_stand_still) =
+            split2(self_blocks, |self_block| {
+                blocks.iter().any(|block| LSMBlock::intersect(block, self_block))
+            });
+
+        let (mut incoming_to_merge, mut incoming_stand_still) =
+            split2(blocks, |block| {
+                self_to_merge.iter().any(|self_block| LSMBlock::intersect(block, self_block))
+            });
 
         let removed_files =
             self_to_merge
@@ -171,9 +169,10 @@ impl LSMLevel {
         let mut all_blocks = self_stand_still;
         all_blocks.append(&mut incoming_stand_still);
         all_blocks.append(&mut new_blocks);
-        let b = all_blocks.len() >= 10usize.pow(self.level);
-        (LSMLevel::with_blocks(self.level, all_blocks, self.file_id_manager),
-         ManifestUpdate::new(added_files, removed_files),
+
+        self.blocks.append(&mut all_blocks);
+        let b = self.blocks.len() >= 10usize.pow(self.level);
+        (ManifestUpdate::new(added_files, removed_files),
          b)
     }
 }
