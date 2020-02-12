@@ -145,9 +145,36 @@ impl LSMBlock {
     }
 }
 
+struct FileIdManager {
+    current: u32
+}
+
+impl FileIdManager {
+    fn new(start_with: u32) -> Self {
+        FileIdManager { current: start_with }
+    }
+
+    fn allocate(&mut self) -> u32 {
+        let ret = self.current;
+        self.current += 1;
+        ret
+    }
+
+    fn current(&mut self) -> u32 {
+        self.current
+    }
+}
+
+impl Default for FileIdManager {
+    fn default() -> Self {
+        Self::new(0)
+    }
+}
+
 struct LSMLevel {
     level: u32,
-    blocks: Vec<LSMBlock>
+    blocks: Vec<LSMBlock>,
+    file_id_manager: FileIdManager
 }
 
 struct ManifestUpdate {
@@ -168,12 +195,12 @@ impl Default for ManifestUpdate {
 }
 
 impl LSMLevel {
-    fn new(level: u32) -> Self {
-        LSMLevel { level, blocks: Vec::new() }
+    fn new(level: u32, file_id_manager: FileIdManager) -> Self {
+        LSMLevel { level, blocks: Vec::new(), file_id_manager }
     }
 
-    fn with_blocks(level: u32, blocks: Vec<LSMBlock>) -> Self {
-        LSMLevel { level, blocks }
+    fn with_blocks(level: u32, blocks: Vec<LSMBlock>, file_id_manager: FileIdManager) -> Self {
+        LSMLevel { level, blocks, file_id_manager }
     }
 
     fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
@@ -215,7 +242,7 @@ impl LSMLevel {
                         Ordering::Greater => Ordering::Greater,
                         Ordering::Less => Ordering::Less
                     }
-                })
+                }.reverse())
             }
         }
 
@@ -315,7 +342,9 @@ impl LSMLevel {
         all_blocks.append(&mut incoming_stand_still);
         all_blocks.append(&mut new_blocks);
         let b = all_blocks.len() >= 10usize.pow(self.level);
-        (LSMLevel::with_blocks(self.level, all_blocks), ManifestUpdate::new(added_files, removed_files), b)
+        (LSMLevel::with_blocks(self.level, all_blocks, self.file_id_manager),
+         ManifestUpdate::new(added_files, removed_files),
+         b)
     }
 }
 
