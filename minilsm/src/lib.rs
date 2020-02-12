@@ -41,6 +41,43 @@ fn split2<T, F>(mut v: Vec<T>, f: F) -> (Vec<T>, Vec<T>)
     (v1, v)
 }
 
+#[derive(Debug)]
+pub struct LSMConfig {
+    pub level1_size: usize,
+    pub level2_size: usize,
+    pub size_scale: usize,
+    pub block_size: usize,
+    pub merge_step_size: usize
+}
+
+impl LSMConfig {
+    fn new(level1_size: usize,
+           level2_size: usize,
+           size_scale: usize,
+           block_size: usize,
+           merge_step_size: usize) -> Self {
+        LSMConfig { level1_size, level2_size, size_scale, block_size, merge_step_size }
+    }
+
+    fn testing() -> Self {
+        LSMConfig::new(1, 2, 2, 4, 1)
+    }
+
+    fn level_size_max(&self, level: usize) -> usize {
+        if level == 1 {
+            self.level1_size
+        } else {
+            self.level2_size * self.size_scale.pow((level - 1) as u32)
+        }
+    }
+}
+
+impl Default for LSMConfig {
+    fn default() -> Self {
+        LSMConfig::new(4, 10, 10, 1024, 4)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

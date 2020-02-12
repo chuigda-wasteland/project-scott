@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 lru = "0.4.3"
+rand = "0.7.0"

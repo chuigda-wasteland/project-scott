@@ -1,7 +1,7 @@
 use crate::block::{LSMBlock, LSMBlockIter};
 use crate::cache::LSMCacheManager;
 use crate::metadata::ManifestUpdate;
-use crate::{KVPair, split2};
+use crate::{KVPair, split2, LSMConfig};
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -32,22 +32,23 @@ impl Default for FileIdManager {
     }
 }
 
-struct LSMLevel {
+struct LSMLevel<'a> {
     level: u32,
     blocks: Vec<LSMBlock>,
+    config: &'a LSMConfig,
     file_id_manager: FileIdManager
 }
 
-impl LSMLevel {
-    fn new(level: u32, file_id_manager: FileIdManager) -> Self {
-        LSMLevel { level, blocks: Vec::new(), file_id_manager }
+impl<'a> LSMLevel<'a> {
+    fn new(level: u32, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
+        LSMLevel { level, blocks: Vec::new(), config, file_id_manager }
     }
 
-    fn with_blocks(level: u32, blocks: Vec<LSMBlock>, file_id_manager: FileIdManager) -> Self {
-        LSMLevel { level, blocks, file_id_manager }
+    fn with_blocks(level: u32, blocks: Vec<LSMBlock>, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
+        LSMLevel { level, blocks, config, file_id_manager }
     }
 
-    fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
+    fn get<'b>(&self, key: &str, cache_manager: &'b mut LSMCacheManager) -> Option<&'b str> {
         unsafe {
             let cache_manager= cache_manager as *mut LSMCacheManager;
             for block in self.blocks.iter().rev() {
@@ -59,7 +60,7 @@ impl LSMLevel {
         None
     }
 
-    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>) -> Vec<LSMBlock> {
+    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, config: &LSMConfig) -> Vec<LSMBlock> {
         #[derive(Eq, PartialEq)]
         struct HeapTriplet(String, String, usize);
 
@@ -108,7 +109,7 @@ impl LSMLevel {
             }
             buffer.push((key, value));
 
-            if buffer.len() >= 256 {
+            if buffer.len() >= config.block_size {
                 /// TODO implement block building
                 buffer.clear();
                 unimplemented!()
@@ -126,7 +127,7 @@ impl LSMLevel {
     fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock>) -> (ManifestUpdate, bool) {
         if self.level == 1 {
             self.blocks.append(&mut blocks);
-            let b = self.blocks.len() > 10;
+            let b = self.blocks.len() > self.config.level1_size;
             return (ManifestUpdate::default(), b)
         }
 
@@ -159,7 +160,7 @@ impl LSMLevel {
                 .map(|block| block.iter())
                 .collect::<Vec<_>>();
 
-        let mut new_blocks = LSMLevel::merge_blocks_intern(merging_iters);
+        let mut new_blocks = LSMLevel::merge_blocks_intern(merging_iters, self.config);
         let added_files =
             new_blocks
                 .iter()
@@ -182,7 +183,7 @@ mod test {
     use crate::block::LSMBlock;
     use crate::level::{LSMLevel, FileIdManager};
     use crate::cache::LSMCacheManager;
-    use crate::KVPair;
+    use crate::{KVPair, LSMConfig};
 
     #[test]
     fn test_level1_lookup() {
@@ -222,9 +223,10 @@ mod test {
                 let block_file_name = format!("test_level1_lookup_{}.msst", i);
                 LSMBlock::create(block_file_name, data)
             }).collect::<Vec<_>>();
+        let lsm_config = LSMConfig::testing();
         let file_id_manager = FileIdManager::default();
         let mut cache_manager = LSMCacheManager::new(4);
-        let level = LSMLevel::with_blocks(1, blocks, file_id_manager);
+        let level = LSMLevel::with_blocks(1, blocks, &lsm_config, file_id_manager);
 
         assert_eq!(level.get("lyzh", &mut cache_manager).unwrap(), "75");
         assert_eq!(level.get("chu1gda", &mut cache_manager).unwrap(), "75");
