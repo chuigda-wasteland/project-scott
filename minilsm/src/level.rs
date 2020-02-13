@@ -60,7 +60,8 @@ impl<'a> LSMLevel<'a> {
         None
     }
 
-    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, config: &LSMConfig) -> Vec<LSMBlock> {
+    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, level: usize,
+                           config: &LSMConfig, file_id_manager: &mut FileIdManager) -> Vec<LSMBlock> {
         #[derive(Eq, PartialEq)]
         struct HeapTriplet(String, String, usize);
 
@@ -84,7 +85,7 @@ impl<'a> LSMLevel<'a> {
             }
         }
 
-        let mut buffer: Vec<(String, String)> = Vec::new();
+        let mut buffer: Vec<KVPair> = Vec::new();
         let mut blocks_built: Vec<LSMBlock> = Vec::new();
         let mut heap = BinaryHeap::new();
         for (i, iter) in iters.iter_mut().enumerate() {
@@ -95,7 +96,7 @@ impl<'a> LSMLevel<'a> {
 
         let mut last_block_idx: Option<usize> = None;
         while let Some(HeapTriplet(key, value, block_idx)) = heap.pop() {
-            if let Some((last_key, _)) = buffer.last() {
+            if let Some(KVPair(last_key, _)) = buffer.last() {
                 if *last_key == key {
                     let last_block_idx = last_block_idx.unwrap();
                     if block_idx > last_block_idx {
@@ -107,18 +108,25 @@ impl<'a> LSMLevel<'a> {
                     // Do nothing
                 }
             }
-            buffer.push((key, value));
-
-            if buffer.len() >= config.block_size {
-                /// TODO implement block building
-                buffer.clear();
-                unimplemented!()
-            }
+            buffer.push(KVPair(key, value));
 
             last_block_idx.replace(block_idx);
             if let Some(KVPair(key, value)) = iters[block_idx].next() {
                 heap.push(HeapTriplet(key, value, block_idx));
             }
+        }
+
+        while buffer.len() >= 8 {
+            blocks_built.push(LSMBlock::create(
+                format!("lv{}_{}.msst", level, file_id_manager.allocate()),
+                buffer.drain(0..8).collect()
+            ));
+        }
+        if !buffer.is_empty() {
+            blocks_built.push(LSMBlock::create(
+                format!("lv{}_{}.msst", level, file_id_manager.allocate()),
+                buffer
+            ));
         }
 
         blocks_built
@@ -160,7 +168,9 @@ impl<'a> LSMLevel<'a> {
                 .map(|block| block.iter())
                 .collect::<Vec<_>>();
 
-        let mut new_blocks = LSMLevel::merge_blocks_intern(merging_iters, self.config);
+        let mut new_blocks =
+            LSMLevel::merge_blocks_intern(merging_iters, self.level as usize,
+                                          self.config, &mut self.file_id_manager);
         let added_files =
             new_blocks
                 .iter()
@@ -238,13 +248,121 @@ mod test {
         assert!(level.get("zyy", &mut cache_manager).is_none());
     }
 
+    use crate::kv_pair;
+    use crate::test_util::gen_kv;
+    use std::collections::BTreeMap;
+
     #[test]
     fn test_lvn_lookup() {
-        // TODO it takes some time to build up testing data pieces
+        let lsm_config = LSMConfig::testing();
+        let file_id_manager = FileIdManager::default();
+        let mut cache_manager = LSMCacheManager::new(4);
+
+
+        let kvs = vec![
+            gen_kv("aaa", lsm_config.block_size),
+            gen_kv("aba", lsm_config.block_size),
+            gen_kv("aca", lsm_config.block_size),
+            gen_kv("ada", lsm_config.block_size)
+        ];
+        let blocks =
+            kvs.clone()
+                .into_iter()
+                .enumerate()
+                .map(|(i, data)| {
+                    LSMBlock::create(format!("test_lvn_lookup_{}.msst", i), data)
+                })
+                .collect();
+        let level2 = LSMLevel::with_blocks(2, blocks, &lsm_config, file_id_manager);
+
+        for kv_piece in &kvs {
+            for KVPair(key, value) in kv_piece {
+                assert_eq!(level2.get(key, &mut cache_manager).unwrap(), value);
+            }
+        }
     }
 
     #[test]
     fn test_merge() {
-        // TODO it takes some time to build up testing data pieces
+        // Input blocks
+        // LV1       [AAE ~ AAL]                   [ACA-ACH]
+        // LV2 [AAA ~ AAJ] [AAK ~ AAT] [ABA ~ ABH]           [ADA ~ ADH]
+        //
+        // expected output blocks, blocks marked '*' are newly created
+        // LV2 *[AAA ~ AAH] *[AAI ~ AAP] *[AAQ ~ AAT] [ABA ~ ABH] [ACA ~ ACH] [ADA ~ ADH]
+
+        let lsm_config = LSMConfig::testing();
+        let lv2_file_id_manager = FileIdManager::default();
+        let mut cache_manager = LSMCacheManager::new(4);
+
+        let lv1_data = vec![
+            gen_kv("aae", 8),
+            gen_kv("aca", 8)
+        ];
+        let lv2_data = vec![
+            // the first two blocks must be built manually
+            vec![
+                kv_pair!("aaa", "unique1"),
+                kv_pair!("aab", "unique2"),
+                kv_pair!("aac", "unique3"),
+                kv_pair!("aad", "unique4"),
+                kv_pair!("aae", "special1"),
+                kv_pair!("aag", "special2"),
+                kv_pair!("aah", "special3"),
+                kv_pair!("aaj", "special4"),
+            ],
+            vec![
+                kv_pair!("aal", "很多时候"),
+                kv_pair!("aam", "重复地向别人请教一些高度相似的问题"),
+                kv_pair!("aan", "尤其是在这个问题很trivial的情况下"),
+                kv_pair!("aao", "是一种很不礼貌的行为"),
+                kv_pair!("aaq", "最近在网上看到一个人"),
+                kv_pair!("aar", "他每天都会重复一件事"),
+                kv_pair!("aas", "首先问一个用直觉就能感觉出来答案的问题"),
+                kv_pair!("aat", "然后在刚才的问题中的名词随便选一个"),
+            ],
+            gen_kv("aba", 8),
+            gen_kv("ada", 8)
+        ];
+
+        let mut expectations = BTreeMap::new();
+        lv2_data.iter().chain(lv1_data.iter()).for_each(|kvs| {
+            kvs.iter().for_each(|KVPair(k, v)| {
+                let _ = expectations.insert(k, v);
+            })
+        });
+
+        let lv1_blocks =
+            lv1_data
+                .clone().into_iter()
+                .enumerate()
+                .map(|(i, kvs)| {
+                    LSMBlock::create(format!("test_merge_lv1_{}.msst", i), kvs)
+                })
+                .collect::<Vec<_>>();
+
+        let lv2_blocks =
+            lv2_data
+                .clone().into_iter()
+                .enumerate()
+                .map(|(i, kvs)| {
+                    LSMBlock::create(format!("test_merge_lv2_{}.msst", i), kvs)
+                })
+                .collect::<Vec<_>>();
+
+        let mut level2 = LSMLevel::with_blocks(2, lv2_blocks, &lsm_config, lv2_file_id_manager);
+        let _ = level2.merge_blocks(lv1_blocks);
+
+        for (&k, &v) in expectations.iter() {
+            assert_eq!(level2.get(k, &mut cache_manager).unwrap(), v)
+        }
+
+        for (i, b1) in level2.blocks.iter().enumerate() {
+            for (j, b2) in level2.blocks.iter().enumerate() {
+                if i != j {
+                    assert!(!LSMBlock::intersect(b1, b2))
+                }
+            }
+        }
     }
 }

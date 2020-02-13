@@ -62,7 +62,7 @@ impl LSMConfig {
     }
 
     fn testing() -> Self {
-        LSMConfig::new(1, 2, 2, 4, 1)
+        LSMConfig::new(2, 4, 2, 8, 1)
     }
 
     fn level_size_max(&self, level: usize) -> usize {

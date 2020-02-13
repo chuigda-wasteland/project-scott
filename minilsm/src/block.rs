@@ -28,16 +28,13 @@ impl Iterator for LSMBlockIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut buf = String::new();
-        if let Ok(bytes_read) = self.block_file_handle.read_line(&mut buf) {
-            if bytes_read == 0 {
-                None
-            } else {
-                let parts: Vec<_> = buf.trim().split(":").collect();
-                assert_eq!(parts.len(), 2);
-                Some(KVPair(parts[0].to_string(), parts[1].to_string()))
-            }
+        let bytes_read = self.block_file_handle.read_line(&mut buf).unwrap();
+        if bytes_read == 0 {
+            None
         } else {
-            panic!()
+            let parts: Vec<_> = buf.trim().split(":").collect();
+            assert_eq!(parts.len(), 2);
+            Some(KVPair(parts[0].to_string(), parts[1].to_string()))
         }
     }
 }
@@ -59,6 +56,7 @@ impl LSMBlock {
             File::with_options()
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(&block_file_name).unwrap();
         for data_line in data {
             file.write(format!("{}:{}\n", data_line.0, data_line.1).as_bytes()).unwrap();
@@ -94,6 +92,8 @@ mod test {
     use crate::block::LSMBlock;
     use crate::cache::LSMCacheManager;
     use crate::KVPair;
+    use std::fs::File;
+    use std::io::{BufReader, BufRead};
 
     #[test]
     fn test_build_sst() {
@@ -139,5 +139,20 @@ mod test {
 
         let iter_read_data = block_iter.collect::<Vec<_>>();
         assert_eq!(iter_read_data, data);
+    }
+
+    #[test]
+    fn test1() {
+        let mut f = BufReader::new(File::open("lv2_0.msst").unwrap());
+        let mut buffer = String::new();
+        loop {
+            match f.read_line(&mut buffer) {
+                Ok(size) => {},
+                Err(e) => {
+                    eprintln!("{:?}", e);
+                    break;
+                }
+            }
+        }
     }
 }

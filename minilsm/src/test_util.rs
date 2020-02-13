@@ -1,6 +1,12 @@
 use lazy_static::lazy_static;
 use std::ops::Deref;
 use rand::Rng;
+use crate::KVPair;
+
+#[macro_export]
+macro_rules! kv_pair {
+    ($k:expr, $v:expr) => (KVPair($k.to_owned(), $v.to_owned()));
+}
 
 lazy_static! {
     static ref A2Z_VECTOR: Vec<String> = {
@@ -25,7 +31,7 @@ lazy_static! {
     };
 }
 
-fn gen_keys_range(start: &str, count: usize) -> Vec<String> {
+pub(crate) fn gen_keys_range(start: &str, count: usize) -> Vec<String> {
     let search_vec: &Vec<String> = A2Z_VECTOR.deref();
     let start_idx = search_vec.binary_search(&start.to_string()).unwrap();
     let end_idx = start_idx + count;
@@ -34,7 +40,7 @@ fn gen_keys_range(start: &str, count: usize) -> Vec<String> {
     (&search_vec[start_idx..end_idx]).to_owned()
 }
 
-fn gen_value(count: usize) -> Vec<String> {
+pub(crate) fn gen_values(count: usize) -> Vec<String> {
     let mut ret = Vec::new();
     let search_vec: &Vec<String> = CANDIDATE_VALUES.deref();
     for i in 0..count {
@@ -43,4 +49,9 @@ fn gen_value(count: usize) -> Vec<String> {
     ret
 }
 
+pub(crate) fn gen_kv(key_start: &str, count: usize) -> Vec<KVPair> {
+    let keys = gen_keys_range(key_start, count);
+    let values = gen_values(count);
 
+    keys.into_iter().zip(values.into_iter()).map(|(k, v)| KVPair(k, v)).collect()
+}
