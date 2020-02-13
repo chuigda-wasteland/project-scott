@@ -1,8 +1,8 @@
 # project-scott
 
-[![Build Status](https://travis-ci.com/SchrodingerZhu/project-scott.svg?branch=master)](https://travis-ci.com/SchrodingerZhu/project-scott)
+[![Build Status](https://travis-ci.com/ICEYSELF/project-scott.svg?branch=master)](https://travis-ci.com/ICEYSELF/project-scott)
 
-[![codecov](https://codecov.io/gh/SchrodingerZhu/project-scott/branch/master/graph/badge.svg)](https://codecov.io/gh/SchrodingerZhu/project-scott)
+[![codecov](https://codecov.io/gh/ICEYSELF/project-scott/branch/master/graph/badge.svg)](https://codecov.io/gh/ICEYSELF/project-scott)
 
 
 A series of attemptations to find a disk storage data structure
