@@ -5,11 +5,13 @@ mod cache;
 mod block;
 mod metadata;
 mod level;
+mod test_util;
 
 use cache::*;
 use block::*;
 use metadata::*;
 use level::*;
+
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone)]
