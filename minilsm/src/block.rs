@@ -81,9 +81,9 @@ impl LSMBlock {
         LSMBlockIter::new(self.block_file_name.as_str())
     }
 
-    pub fn intersect(b1: &LSMBlock, b2: &LSMBlock) -> bool {
-        (b1.lower_bound < b2.upper_bound && b2.lower_bound < b1.upper_bound)
-            || (b2.lower_bound < b1.upper_bound && b1.lower_bound < b2.upper_bound)
+    pub fn interleave(b1: &LSMBlock, b2: &LSMBlock) -> bool {
+        (b1.lower_bound <= b2.upper_bound && b2.lower_bound <= b1.upper_bound)
+            || (b2.lower_bound <= b1.upper_bound && b1.lower_bound <= b2.upper_bound)
     }
 }
 

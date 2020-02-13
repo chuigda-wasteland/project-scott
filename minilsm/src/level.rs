@@ -144,12 +144,12 @@ impl<'a> LSMLevel<'a> {
 
         let (mut self_to_merge, mut self_stand_still) =
             split2(self_blocks, |self_block| {
-                blocks.iter().any(|block| LSMBlock::intersect(block, self_block))
+                blocks.iter().any(|block| LSMBlock::interleave(block, self_block))
             });
 
         let (mut incoming_to_merge, mut incoming_stand_still) =
             split2(blocks, |block| {
-                self_to_merge.iter().any(|self_block| LSMBlock::intersect(block, self_block))
+                self_to_merge.iter().any(|self_block| LSMBlock::interleave(block, self_block))
             });
 
         let removed_files =
@@ -360,7 +360,7 @@ mod test {
         for (i, b1) in level2.blocks.iter().enumerate() {
             for (j, b2) in level2.blocks.iter().enumerate() {
                 if i != j {
-                    assert!(!LSMBlock::intersect(b1, b2))
+                    assert!(!LSMBlock::interleave(b1, b2))
                 }
             }
         }
