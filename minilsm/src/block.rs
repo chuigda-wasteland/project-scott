@@ -140,19 +140,4 @@ mod test {
         let iter_read_data = block_iter.collect::<Vec<_>>();
         assert_eq!(iter_read_data, data);
     }
-
-    #[test]
-    fn test1() {
-        let mut f = BufReader::new(File::open("lv2_0.msst").unwrap());
-        let mut buffer = String::new();
-        loop {
-            match f.read_line(&mut buffer) {
-                Ok(size) => {},
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    break;
-                }
-            }
-        }
-    }
 }
