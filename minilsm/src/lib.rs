@@ -62,6 +62,8 @@ impl LSMConfig {
     }
 
     fn testing() -> Self {
+        // WARNING: Do NOT change these parameters. Changing these parameters requires changes of tests. see level.rs
+        // for further details.
         LSMConfig::new(2, 4, 2, 8, 1)
     }
 
