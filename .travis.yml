@@ -8,16 +8,22 @@ addons:
 cache: cargo
 rust:
   - nightly
-
+before_install:
+    - sudo apt-get update
+    - sudo apt-get -y install lcov wget curl build-essential cmake
 before_cache: |
     cargo install cargo-tarpaulin
 
 script:
-- cd minilsm
-- cargo clean
-- cargo build
-- cargo test
+- cd minilsm && cargo clean && cargo build && cargo test && cd ..
+- cd mdb && mkdir build && cd build && cmake .. -DMDB_COVERAGE=ON && cmake --build . && ctest && cd ../.. 
 
 after_success: |
-    cargo tarpaulin --out Xml
-    bash <(curl -s https://codecov.io/bash)
+    set -e
+    cd minilsm && cargo tarpaulin --out Xml && bash <(curl -s https://codecov.io/bash) && cd ..
+    wget https://codecov.io/bash -O mdb/cov.sh && chmod +x mdb/cov.sh
+    cd mdb
+    lcov --capture --directory . --output-file coverage.info
+    lcov --remove coverage.info '/usr/include/*' --output-file coverage.info
+    lcov --list coverage.info
+    ./cov.sh -f coverage.info
