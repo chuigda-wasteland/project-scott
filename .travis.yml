@@ -22,8 +22,8 @@ script:
 after_success: |
     set -e
     cd mdb &&\
-    wget https://codecov.io/bash -O mdb/cov.sh &&\
-    chmod +x mdb/cov.sh &&\
+    wget https://codecov.io/bash -O cov.sh &&\
+    chmod +x cov.sh &&\
     lcov --capture --directory . --output-file coverage.info &&\
     lcov --remove coverage.info '/usr/include/*' --output-file coverage.info &&\
     lcov --list coverage.info &&\
