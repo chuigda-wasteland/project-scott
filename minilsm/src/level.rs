@@ -116,10 +116,10 @@ impl<'a> LSMLevel<'a> {
             }
         }
 
-        while buffer.len() >= 8 {
+        while buffer.len() >= config.block_size {
             blocks_built.push(LSMBlock::create(
                 format!("lv{}_{}.msst", level, file_id_manager.allocate()),
-                buffer.drain(0..8).collect()
+                buffer.drain(0..config.block_size).collect()
             ));
         }
         if !buffer.is_empty() {
