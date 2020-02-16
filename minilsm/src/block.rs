@@ -6,9 +6,22 @@ use crate::cache::LSMCacheManager;
 use crate::KVPair;
 
 pub struct LSMBlock {
-    block_file_name: String,
+    origin_level: u32,
+    block_file_id: u32,
     lower_bound: String,
     upper_bound: String
+}
+
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Copy)]
+pub struct LSMBlockMeta {
+    origin_level: u32,
+    block_file_id: u32
+}
+
+impl LSMBlockMeta {
+    pub fn block_file_name(&self) -> String {
+        LSMBlock::block_file_name_int(self.origin_level, self.block_file_id)
+    }
 }
 
 pub struct LSMBlockIter {
@@ -16,9 +29,9 @@ pub struct LSMBlockIter {
 }
 
 impl LSMBlockIter {
-    pub fn new(block_file_name: &str) -> Self {
+    pub fn new(block_file_meta: LSMBlockMeta) -> Self {
         LSMBlockIter {
-            block_file_handle: BufReader::new(File::with_options().read(true).open(block_file_name).unwrap())
+            block_file_handle: BufReader::new(File::with_options().read(true).open(block_file_meta.block_file_name()).unwrap())
         }
     }
 }
@@ -42,16 +55,17 @@ impl Iterator for LSMBlockIter {
 impl FusedIterator for LSMBlockIter { }
 
 impl LSMBlock {
-    pub fn new(block_file_name: String, lower_bound: String, upper_bound: String) -> Self {
+    pub fn new(origin_level: u32, block_file_id: u32, lower_bound: String, upper_bound: String) -> Self {
         LSMBlock {
-            block_file_name, lower_bound, upper_bound
+            origin_level, block_file_id, lower_bound, upper_bound
         }
     }
 
-    pub fn create(block_file_name: String, data: Vec<KVPair>) -> Self {
+    pub fn create(origin_level: u32, block_file_id: u32, data: Vec<KVPair>) -> Self {
         let lower_bound = data.first().unwrap().0.clone();
         let upper_bound = data.last().unwrap().0.clone();
 
+        let block_file_name = LSMBlock::block_file_name_int(origin_level, block_file_id);
         let mut file =
             File::with_options()
                 .write(true)
@@ -62,11 +76,19 @@ impl LSMBlock {
             write!(file, "{}:{}\n", data_line.0, data_line.1).unwrap();
         }
 
-        LSMBlock::new(block_file_name, lower_bound, upper_bound)
+        LSMBlock::new(origin_level, block_file_id, lower_bound, upper_bound)
     }
 
-    pub fn block_file_name(&self) -> &str {
-        self.block_file_name.as_str()
+    pub fn block_file_name(&self) -> String {
+        LSMBlock::block_file_name_int(self.origin_level, self.block_file_id)
+    }
+
+    pub fn metadata(&self) -> LSMBlockMeta {
+        LSMBlockMeta { origin_level: self.origin_level, block_file_id: self.block_file_id }
+    }
+
+    fn block_file_name_int(origin_level: u32, block_file_id: u32) -> String {
+        format!("lv{}_{}.msst", origin_level, block_file_id)
     }
 
     pub fn lower_bound(&self) -> &str {
@@ -79,14 +101,14 @@ impl LSMBlock {
 
     pub fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
         if key >= self.lower_bound.as_str() && key <= self.upper_bound.as_str() {
-            cache_manager.get_cache(&self.block_file_name).lookup(key)
+            cache_manager.get_cache(self.metadata()).lookup(key)
         } else {
             None
         }
     }
 
     pub fn iter(&self) -> LSMBlockIter {
-        LSMBlockIter::new(self.block_file_name.as_str())
+        LSMBlockIter::new(self.metadata())
     }
 
     pub fn interleave(b1: &LSMBlock, b2: &LSMBlock) -> bool {
@@ -121,7 +143,7 @@ mod test {
                 .map(|&(key, value)| KVPair(key.to_string(), value.to_string()))
                 .collect::<Vec<_>>();
 
-        let block = LSMBlock::create("test_build_sst.msst".to_string(), data);
+        let block = LSMBlock::create(0, 0, data);
         let mut cache_manager = LSMCacheManager::new(10);
 
         assert_eq!(block.get("ice1000", &mut cache_manager).unwrap(), "PSU");
@@ -143,7 +165,7 @@ mod test {
                 .map(|&(key, value)| KVPair(key.to_string(), value.to_string()))
                 .collect::<Vec<_>>();
         data.sort();
-        let block = LSMBlock::create("test_block_iter.msst".to_string(), data.clone());
+        let block = LSMBlock::create(0, 1, data.clone());
         let block_iter = block.iter();
 
         let iter_read_data = block_iter.collect::<Vec<_>>();

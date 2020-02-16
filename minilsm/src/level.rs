@@ -47,7 +47,7 @@ impl<'a> LSMLevel<'a> {
     }
 
     fn from_meta_file(config: &'a LSMConfig, level: u32) -> Self {
-        let level_meta_file = format!("lv{}_meta.mfst", level);
+        let level_meta_file = LSMLevel::meta_file_name_int(level);
         let f = File::with_options().read(true).open(&level_meta_file).unwrap();
         let mut f = BufReader::new(f);
 
@@ -63,23 +63,32 @@ impl<'a> LSMLevel<'a> {
 
             let upper_bound = parts.pop().unwrap();
             let lower_bound = parts.pop().unwrap();
-            let block_file_name = parts.pop().unwrap();
+            let block_file_id = parts.pop().unwrap().parse::<u32>().unwrap();
+            let origin_level = parts.pop().unwrap().parse::<u32>().unwrap();
 
             assert_eq!(parts.len(), 3);
 
-            blocks.push(LSMBlock::new(block_file_name, lower_bound, upper_bound));
+            blocks.push(LSMBlock::new(origin_level, block_file_id, lower_bound, upper_bound));
         }
 
         LSMLevel::with_blocks(level, blocks, config, file_id_manager)
     }
 
     fn update_meta_file(&self) {
-        let level_meta_file = format!("lv{}_meta.mfst", self.level);
+        let level_meta_file = self.meta_file_name();
         let mut f = File::with_options().write(true).create(true).truncate(true).open(level_meta_file).unwrap();
         write!(f, "{}\n", self.file_id_manager.current()).unwrap();
         for block in self.blocks.iter() {
             write!(f, "{}:{}:{}\n", block.block_file_name(), block.lower_bound(), block.upper_bound()).unwrap();
         }
+    }
+
+    fn meta_file_name(&self) -> String {
+        LSMLevel::meta_file_name_int(self.level)
+    }
+
+    fn meta_file_name_int(level: u32) -> String {
+        format!("lv{}_meta.mfst", level)
     }
 
     fn with_blocks(level: u32, blocks: Vec<LSMBlock>, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
@@ -98,7 +107,7 @@ impl<'a> LSMLevel<'a> {
         None
     }
 
-    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, level: usize,
+    fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, level: u32,
                            config: &LSMConfig, file_id_manager: &mut FileIdManager) -> Vec<LSMBlock> {
         #[derive(Eq, PartialEq)]
         struct HeapTriplet(String, String, usize);
@@ -156,13 +165,13 @@ impl<'a> LSMLevel<'a> {
 
         while buffer.len() >= config.block_size {
             blocks_built.push(LSMBlock::create(
-                format!("lv{}_{}.msst", level, file_id_manager.allocate()),
+                level, file_id_manager.allocate(),
                 buffer.drain(0..config.block_size).collect()
             ));
         }
         if !buffer.is_empty() {
             blocks_built.push(LSMBlock::create(
-                format!("lv{}_{}.msst", level, file_id_manager.allocate()),
+                level, file_id_manager.allocate(),
                 buffer
             ));
         }
@@ -207,7 +216,7 @@ impl<'a> LSMLevel<'a> {
                 .collect::<Vec<_>>();
 
         let mut new_blocks =
-            LSMLevel::merge_blocks_intern(merging_iters, self.level as usize,
+            LSMLevel::merge_blocks_intern(merging_iters, self.level,
                                           self.config, &mut self.file_id_manager);
         let added_files =
             new_blocks
@@ -268,8 +277,7 @@ mod test {
                        .map(|(k, v)| KVPair(k.to_string(), v.to_string()))
                        .collect::<Vec<_>>();
                 data.sort();
-                let block_file_name = format!("test_level1_lookup_{}.msst", i);
-                LSMBlock::create(block_file_name, data)
+                LSMBlock::create(9, i as u32, data)
             }).collect::<Vec<_>>();
         let lsm_config = LSMConfig::testing();
         let file_id_manager = FileIdManager::default();
@@ -308,7 +316,7 @@ mod test {
                 .into_iter()
                 .enumerate()
                 .map(|(i, data)| {
-                    LSMBlock::create(format!("test_lvn_lookup_{}.msst", i), data)
+                    LSMBlock::create(10, i as u32, data)
                 })
                 .collect();
         let level2 = LSMLevel::with_blocks(2, blocks, &lsm_config, file_id_manager);
@@ -330,7 +338,9 @@ mod test {
         // LV2 *[AAA ~ AAH] *[AAI ~ AAP] *[AAQ ~ AAT] [ABA ~ ABH] [ACA ~ ACH] [ADA ~ ADH]
 
         let lsm_config = LSMConfig::testing();
-        let lv2_file_id_manager = FileIdManager::default();
+
+        // We start from a large file id so that it does not over write our existing blocks
+        let lv2_file_id_manager = FileIdManager::new(99);
         let mut cache_manager = LSMCacheManager::new(4);
 
         let lv1_data = vec![
@@ -375,7 +385,7 @@ mod test {
                 .clone().into_iter()
                 .enumerate()
                 .map(|(i, kvs)| {
-                    LSMBlock::create(format!("test_merge_lv1_{}.msst", i), kvs)
+                    LSMBlock::create(1, i as u32, kvs)
                 })
                 .collect::<Vec<_>>();
 
@@ -384,7 +394,7 @@ mod test {
                 .clone().into_iter()
                 .enumerate()
                 .map(|(i, kvs)| {
-                    LSMBlock::create(format!("test_merge_lv2_{}.msst", i), kvs)
+                    LSMBlock::create(2, i as u32, kvs)
                 })
                 .collect::<Vec<_>>();
 

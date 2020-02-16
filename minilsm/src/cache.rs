@@ -3,19 +3,21 @@ use std::fs::File;
 use std::io::{BufReader, BufRead};
 
 use lru::LruCache;
+use crate::block::{LSMBlock, LSMBlockMeta};
 
 pub struct LSMBlockCache {
-    block_file_name: String,
+    block_file_meta: LSMBlockMeta,
     data: BTreeMap<String, String>
 }
 
 impl LSMBlockCache {
-    pub fn new(block_file_name: String) -> Self {
-        let file = File::with_options().read(true).open(&block_file_name).unwrap();
+    pub fn new(block_file_meta: LSMBlockMeta) -> Self {
+        let block_file_name = block_file_meta.block_file_name();
+        let file = File::with_options().read(true).open(block_file_name).unwrap();
         let mut file = BufReader::new(file);
 
         let mut ret = LSMBlockCache {
-            block_file_name,
+            block_file_meta,
             data: BTreeMap::new()
         };
 
@@ -35,7 +37,7 @@ impl LSMBlockCache {
 }
 
 pub struct LSMCacheManager {
-    lru: LruCache<String, LSMBlockCache>,
+    lru: LruCache<LSMBlockMeta, LSMBlockCache>,
     max_cache_count: usize
 }
 
@@ -47,13 +49,13 @@ impl LSMCacheManager {
         }
     }
 
-    pub fn get_cache(&mut self, file_name: &String) -> &LSMBlockCache {
-        if self.lru.contains(file_name) {
-            self.lru.get(file_name).unwrap()
+    pub fn get_cache(&mut self, block_meta: LSMBlockMeta) -> &LSMBlockCache {
+        if self.lru.contains(&block_meta) {
+            self.lru.get(&block_meta).unwrap()
         } else {
-            let new_cache = LSMBlockCache::new(file_name.to_string());
-            self.lru.put(file_name.to_string(), new_cache);
-            self.lru.get(file_name).unwrap()
+            let new_cache = LSMBlockCache::new(block_meta);
+            self.lru.put(block_meta, new_cache);
+            self.lru.get(&block_meta).unwrap()
         }
     }
 
