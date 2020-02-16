@@ -5,6 +5,8 @@ use crate::{KVPair, split2, LSMConfig};
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::fs::File;
+use std::io::{BufReader, BufRead, Write};
 
 struct FileIdManager {
     current: u32
@@ -21,7 +23,7 @@ impl FileIdManager {
         ret
     }
 
-    fn current(&mut self) -> u32 {
+    fn current(&self) -> u32 {
         self.current
     }
 }
@@ -42,6 +44,42 @@ struct LSMLevel<'a> {
 impl<'a> LSMLevel<'a> {
     fn new(level: u32, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
         LSMLevel { level, blocks: Vec::new(), config, file_id_manager }
+    }
+
+    fn from_meta_file(config: &'a LSMConfig, level: u32) -> Self {
+        let level_meta_file = format!("lv{}_meta.mfst", level);
+        let f = File::with_options().read(true).open(&level_meta_file).unwrap();
+        let mut f = BufReader::new(f);
+
+        let mut file_id_line = String::new();
+        f.read_line(&mut file_id_line).unwrap();
+
+        let cur_file_id = file_id_line.trim().parse::<u32>().unwrap();
+        let file_id_manager = FileIdManager::new(cur_file_id);
+
+        let mut blocks = Vec::new();
+        while f.read_line(&mut file_id_line).unwrap() != 0 {
+            let mut parts: Vec<String> = file_id_line.trim().split(":").map(|s| s.to_string()).collect();
+
+            let upper_bound = parts.pop().unwrap();
+            let lower_bound = parts.pop().unwrap();
+            let block_file_name = parts.pop().unwrap();
+
+            assert_eq!(parts.len(), 3);
+
+            blocks.push(LSMBlock::new(block_file_name, lower_bound, upper_bound));
+        }
+
+        LSMLevel::with_blocks(level, blocks, config, file_id_manager)
+    }
+
+    fn update_meta_file(&self) {
+        let level_meta_file = format!("lv{}_meta.mfst", self.level);
+        let mut f = File::with_options().write(true).create(true).truncate(true).open(level_meta_file).unwrap();
+        write!(f, "{}\n", self.file_id_manager.current()).unwrap();
+        for block in self.blocks.iter() {
+            write!(f, "{}:{}:{}\n", block.block_file_name(), block.lower_bound(), block.upper_bound()).unwrap();
+        }
     }
 
     fn with_blocks(level: u32, blocks: Vec<LSMBlock>, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {

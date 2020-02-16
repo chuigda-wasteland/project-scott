@@ -59,7 +59,7 @@ impl LSMBlock {
                 .truncate(true)
                 .open(&block_file_name).unwrap();
         for data_line in data {
-            file.write(format!("{}:{}\n", data_line.0, data_line.1).as_bytes()).unwrap();
+            write!(file, "{}:{}\n", data_line.0, data_line.1).unwrap();
         }
 
         LSMBlock::new(block_file_name, lower_bound, upper_bound)
@@ -67,6 +67,14 @@ impl LSMBlock {
 
     pub fn block_file_name(&self) -> &str {
         self.block_file_name.as_str()
+    }
+
+    pub fn lower_bound(&self) -> &str {
+        self.lower_bound.as_str()
+    }
+
+    pub fn upper_bound(&self) -> &str {
+        self.upper_bound.as_str()
     }
 
     pub fn get<'a>(&self, key: &str, cache_manager: &'a mut LSMCacheManager) -> Option<&'a str> {
