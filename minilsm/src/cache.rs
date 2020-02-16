@@ -6,7 +6,6 @@ use lru::LruCache;
 use crate::block::{LSMBlock, LSMBlockMeta};
 
 pub struct LSMBlockCache {
-    block_file_meta: LSMBlockMeta,
     data: BTreeMap<String, String>
 }
 
@@ -17,7 +16,6 @@ impl LSMBlockCache {
         let mut file = BufReader::new(file);
 
         let mut ret = LSMBlockCache {
-            block_file_meta,
             data: BTreeMap::new()
         };
 
@@ -36,12 +34,12 @@ impl LSMBlockCache {
     }
 }
 
-pub struct LSMCacheManager {
-    lru: LruCache<LSMBlockMeta, LSMBlockCache>,
+pub struct LSMCacheManager<'a> {
+    lru: LruCache<LSMBlockMeta<'a>, LSMBlockCache>,
     max_cache_count: usize
 }
 
-impl LSMCacheManager {
+impl<'a> LSMCacheManager<'a> {
     pub fn new(max_cache_count: usize) -> Self {
         LSMCacheManager {
             lru: LruCache::new(max_cache_count),
@@ -49,7 +47,7 @@ impl LSMCacheManager {
         }
     }
 
-    pub fn get_cache(&mut self, block_meta: LSMBlockMeta) -> &LSMBlockCache {
+    pub fn get_cache(&mut self, block_meta: LSMBlockMeta<'a>) -> &LSMBlockCache {
         if self.lru.contains(&block_meta) {
             self.lru.get(&block_meta).unwrap()
         } else {

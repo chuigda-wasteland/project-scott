@@ -45,6 +45,7 @@ fn split2<T, F>(mut v: Vec<T>, f: F) -> (Vec<T>, Vec<T>)
 
 #[derive(Debug)]
 pub struct LSMConfig {
+    pub db_name: String,
     pub level1_size: usize,
     pub level2_size: usize,
     pub size_scale: usize,
@@ -53,18 +54,19 @@ pub struct LSMConfig {
 }
 
 impl LSMConfig {
-    fn new(level1_size: usize,
+    fn new(db_name: impl ToString,
+           level1_size: usize,
            level2_size: usize,
            size_scale: usize,
            block_size: usize,
            merge_step_size: usize) -> Self {
-        LSMConfig { level1_size, level2_size, size_scale, block_size, merge_step_size }
+        LSMConfig { db_name: db_name.to_string(), level1_size, level2_size, size_scale, block_size, merge_step_size }
     }
 
-    fn testing() -> Self {
+    fn testing(db_name: impl ToString) -> Self {
         // WARNING: Do NOT change these parameters. Changing these parameters requires changes of tests. see level.rs
         // for further details.
-        LSMConfig::new(2, 4, 2, 8, 2)
+        LSMConfig::new(db_name, 2, 4, 2, 8, 2)
     }
 
     fn level_size_max(&self, level: usize) -> usize {
@@ -78,7 +80,7 @@ impl LSMConfig {
 
 impl Default for LSMConfig {
     fn default() -> Self {
-        LSMConfig::new(4, 10, 10, 1024, 4)
+        LSMConfig::new("db1", 4, 10, 10, 1024, 4)
     }
 }
 

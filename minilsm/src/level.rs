@@ -36,7 +36,7 @@ impl Default for FileIdManager {
 
 struct LSMLevel<'a> {
     level: u32,
-    blocks: Vec<LSMBlock>,
+    blocks: Vec<LSMBlock<'a>>,
     config: &'a LSMConfig,
     file_id_manager: FileIdManager
 }
@@ -47,7 +47,7 @@ impl<'a> LSMLevel<'a> {
     }
 
     fn from_meta_file(config: &'a LSMConfig, level: u32) -> Self {
-        let level_meta_file = LSMLevel::meta_file_name_int(level);
+        let level_meta_file = LSMLevel::meta_file_name_int(&config.db_name, level);
         let f = File::with_options().read(true).open(&level_meta_file).unwrap();
         let mut f = BufReader::new(f);
 
@@ -68,7 +68,7 @@ impl<'a> LSMLevel<'a> {
 
             assert_eq!(parts.len(), 3);
 
-            blocks.push(LSMBlock::new(origin_level, block_file_id, lower_bound, upper_bound));
+            blocks.push(LSMBlock::new(&config.db_name, origin_level, block_file_id, lower_bound, upper_bound));
         }
 
         LSMLevel::with_blocks(level, blocks, config, file_id_manager)
@@ -84,18 +84,18 @@ impl<'a> LSMLevel<'a> {
     }
 
     fn meta_file_name(&self) -> String {
-        LSMLevel::meta_file_name_int(self.level)
+        LSMLevel::meta_file_name_int(&self.config.db_name, self.level)
     }
 
-    fn meta_file_name_int(level: u32) -> String {
-        format!("lv{}_meta.mfst", level)
+    fn meta_file_name_int(db_name: &str, level: u32) -> String {
+        format!("{}_lv{}_meta.mfst", db_name, level)
     }
 
-    fn with_blocks(level: u32, blocks: Vec<LSMBlock>, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
+    fn with_blocks(level: u32, blocks: Vec<LSMBlock<'a>>, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
         LSMLevel { level, blocks, config, file_id_manager }
     }
 
-    fn get<'b>(&self, key: &str, cache_manager: &'b mut LSMCacheManager) -> Option<&'b str> {
+    fn get<'b>(&self, key: &str, cache_manager: &'b mut LSMCacheManager<'a>) -> Option<&'b str> {
         unsafe {
             let cache_manager= cache_manager as *mut LSMCacheManager;
             for block in self.blocks.iter().rev() {
@@ -108,7 +108,7 @@ impl<'a> LSMLevel<'a> {
     }
 
     fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, level: u32,
-                           config: &LSMConfig, file_id_manager: &mut FileIdManager) -> Vec<LSMBlock> {
+                           config: &'a LSMConfig, file_id_manager: &mut FileIdManager) -> Vec<LSMBlock<'a>> {
         #[derive(Eq, PartialEq)]
         struct HeapTriplet(String, String, usize);
 
@@ -165,12 +165,14 @@ impl<'a> LSMLevel<'a> {
 
         while buffer.len() >= config.block_size {
             blocks_built.push(LSMBlock::create(
+                &config.db_name,
                 level, file_id_manager.allocate(),
                 buffer.drain(0..config.block_size).collect()
             ));
         }
         if !buffer.is_empty() {
             blocks_built.push(LSMBlock::create(
+                &config.db_name,
                 level, file_id_manager.allocate(),
                 buffer
             ));
@@ -179,7 +181,7 @@ impl<'a> LSMLevel<'a> {
         blocks_built
     }
 
-    fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock>) -> (ManifestUpdate, bool) {
+    fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock<'a>>) -> (ManifestUpdate, bool) {
         if self.level == 1 {
             self.blocks.append(&mut blocks);
             let b = self.blocks.len() > self.config.level1_size;
@@ -277,9 +279,9 @@ mod test {
                        .map(|(k, v)| KVPair(k.to_string(), v.to_string()))
                        .collect::<Vec<_>>();
                 data.sort();
-                LSMBlock::create(9, i as u32, data)
+                LSMBlock::create("tdb1", 1, i as u32, data)
             }).collect::<Vec<_>>();
-        let lsm_config = LSMConfig::testing();
+        let lsm_config = LSMConfig::testing("tdb1");
         let file_id_manager = FileIdManager::default();
         let mut cache_manager = LSMCacheManager::new(4);
         let level = LSMLevel::with_blocks(1, blocks, &lsm_config, file_id_manager);
@@ -300,7 +302,7 @@ mod test {
 
     #[test]
     fn test_lvn_lookup() {
-        let lsm_config = LSMConfig::testing();
+        let lsm_config = LSMConfig::testing("tdb2");
         let file_id_manager = FileIdManager::default();
         let mut cache_manager = LSMCacheManager::new(4);
 
@@ -316,7 +318,7 @@ mod test {
                 .into_iter()
                 .enumerate()
                 .map(|(i, data)| {
-                    LSMBlock::create(10, i as u32, data)
+                    LSMBlock::create("tdb2", 2, i as u32, data)
                 })
                 .collect();
         let level2 = LSMLevel::with_blocks(2, blocks, &lsm_config, file_id_manager);
@@ -337,7 +339,7 @@ mod test {
         // expected output blocks, blocks marked '*' are newly created
         // LV2 *[AAA ~ AAH] *[AAI ~ AAP] *[AAQ ~ AAT] [ABA ~ ABH] [ACA ~ ACH] [ADA ~ ADH]
 
-        let lsm_config = LSMConfig::testing();
+        let lsm_config = LSMConfig::testing("tdb3");
 
         // We start from a large file id so that it does not over write our existing blocks
         let lv2_file_id_manager = FileIdManager::new(99);
@@ -385,7 +387,7 @@ mod test {
                 .clone().into_iter()
                 .enumerate()
                 .map(|(i, kvs)| {
-                    LSMBlock::create(1, i as u32, kvs)
+                    LSMBlock::create("tdb3", 1, i as u32, kvs)
                 })
                 .collect::<Vec<_>>();
 
@@ -394,7 +396,7 @@ mod test {
                 .clone().into_iter()
                 .enumerate()
                 .map(|(i, kvs)| {
-                    LSMBlock::create(2, i as u32, kvs)
+                    LSMBlock::create("tdb3", 2, i as u32, kvs)
                 })
                 .collect::<Vec<_>>();
 
