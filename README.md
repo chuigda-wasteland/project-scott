@@ -1,6 +1,6 @@
 # project-scott
 
-[![Build Status](https://api.travis-ci.org/ICEYSELF/project-scott.svg?branch=master)](https://travis-ci.com/ICEYSELF/project-scott)
+[![Build Status](https://api.travis-ci.org/ICEYSELF/project-scott.svg?branch=master)](https://travis-ci.org/ICEYSELF/project-scott)
 
 [![codecov](https://codecov.io/gh/ICEYSELF/project-scott/branch/master/graph/badge.svg)](https://codecov.io/gh/ICEYSELF/project-scott)
 
