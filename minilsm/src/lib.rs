@@ -13,6 +13,12 @@ use metadata::*;
 use level::*;
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::pin::Pin;
+use std::ptr::NonNull;
+use std::ops::{Deref, DerefMut};
+use std::borrow::Borrow;
 
 #[derive(Debug, Clone)]
 pub struct KVPair(String, String);
@@ -50,7 +56,8 @@ pub struct LSMConfig {
     pub level2_size: usize,
     pub size_scale: usize,
     pub block_size: usize,
-    pub merge_step_size: usize
+    pub merge_step_size: usize,
+    pub max_cache_size: usize
 }
 
 impl LSMConfig {
@@ -59,14 +66,23 @@ impl LSMConfig {
            level2_size: usize,
            size_scale: usize,
            block_size: usize,
-           merge_step_size: usize) -> Self {
-        LSMConfig { db_name: db_name.to_string(), level1_size, level2_size, size_scale, block_size, merge_step_size }
+           merge_step_size: usize,
+           max_cache_size: usize) -> Self {
+        LSMConfig {
+            db_name: db_name.to_string(),
+            level1_size,
+            level2_size,
+            size_scale,
+            block_size,
+            merge_step_size,
+            max_cache_size
+        }
     }
 
     fn testing(db_name: impl ToString) -> Self {
         // WARNING: Do NOT change these parameters. Changing these parameters requires changes of tests. see level.rs
         // for further details.
-        LSMConfig::new(db_name, 2, 4, 2, 8, 2)
+        LSMConfig::new(db_name, 2, 4, 2, 8, 2, 16)
     }
 
     fn level_size_max(&self, level: usize) -> usize {
@@ -80,7 +96,62 @@ impl LSMConfig {
 
 impl Default for LSMConfig {
     fn default() -> Self {
-        LSMConfig::new("db1", 4, 10, 10, 1024, 4)
+        LSMConfig::new("db1", 4, 10, 10, 1024, 4, 16)
+    }
+}
+
+struct LSM<'a> {
+    config: LSMConfig,
+    cache_manager: RefCell<LSMCacheManager<'a>>,
+    mut_table: BTreeMap<String, String>,
+    levels: Vec<LSMLevel<'a>>
+}
+
+impl<'a> LSM<'a> {
+    fn new(config: LSMConfig) -> Self {
+        let cache_manager = LSMCacheManager::new(config.max_cache_size);
+        let mut ret = LSM {
+            config,
+            cache_manager: RefCell::new(cache_manager),
+            mut_table: BTreeMap::new(),
+            levels: Vec::new()
+        };
+        ret
+    }
+
+    pub fn get(&self, key: &str) -> Option<String> {
+        if let Some(ret) = self.mut_table.get(key) {
+            return Some(ret.to_string());
+        }
+        for level in self.levels.iter() {
+            if let Some(ret) = level.get(key, self.cache_manager.borrow_mut().deref_mut()) {
+                return Some(ret.to_string());
+            }
+        }
+        None
+    }
+
+    fn self_config(&self) -> &'a LSMConfig {
+        unsafe { (&self.config as *const LSMConfig).as_ref().unwrap() }
+    }
+
+    pub fn put(&mut self, key: impl ToString, value: impl ToString) {
+        let _ = self.mut_table.insert(key.to_string(), value.to_string());
+        if self.mut_table.len() <= self.config.block_size {
+            return;
+        }
+
+        let mut block_data = BTreeMap::new();
+        block_data.append(&mut self.mut_table);
+        let block_data =
+            block_data.into_iter().map(|(k, v)| KVPair(k, v)).collect::<Vec<_>>();
+
+        if self.levels.len() == 0 {
+            self.levels.push(LSMLevel::new(1, self.self_config(),
+                                           FileIdManager::default()))
+        }
+
+        unimplemented!()
     }
 }
 

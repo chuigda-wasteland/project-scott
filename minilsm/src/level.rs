@@ -8,7 +8,7 @@ use std::collections::BinaryHeap;
 use std::fs::File;
 use std::io::{BufReader, BufRead, Write};
 
-struct FileIdManager {
+pub(crate) struct FileIdManager {
     current: u32
 }
 
@@ -34,7 +34,7 @@ impl Default for FileIdManager {
     }
 }
 
-struct LSMLevel<'a> {
+pub(crate) struct LSMLevel<'a> {
     level: u32,
     blocks: Vec<LSMBlock<'a>>,
     config: &'a LSMConfig,
@@ -42,7 +42,7 @@ struct LSMLevel<'a> {
 }
 
 impl<'a> LSMLevel<'a> {
-    fn new(level: u32, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
+    pub(crate) fn new(level: u32, config: &'a LSMConfig, file_id_manager: FileIdManager) -> Self {
         LSMLevel { level, blocks: Vec::new(), config, file_id_manager }
     }
 
@@ -95,7 +95,7 @@ impl<'a> LSMLevel<'a> {
         LSMLevel { level, blocks, config, file_id_manager }
     }
 
-    fn get<'b>(&self, key: &str, cache_manager: &'b mut LSMCacheManager<'a>) -> Option<&'b str> {
+    pub fn get<'b>(&self, key: &str, cache_manager: &'b mut LSMCacheManager<'a>) -> Option<&'b str> {
         unsafe {
             let cache_manager= cache_manager as *mut LSMCacheManager;
             for block in self.blocks.iter().rev() {
