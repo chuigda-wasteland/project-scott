@@ -5,6 +5,7 @@ use std::iter::FusedIterator;
 use crate::cache::LSMCacheManager;
 use crate::KVPair;
 
+#[derive(Clone)]
 pub struct LSMBlock<'a> {
     db_name: &'a str,
     origin_level: u32,

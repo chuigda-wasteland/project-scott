@@ -197,9 +197,38 @@ impl<'a> LSMLevel<'a> {
             });
 
         let (mut incoming_to_merge, mut incoming_stand_still) =
-            split2(blocks, |block| {
-                self_to_merge.iter().any(|self_block| LSMBlock::interleave(block, self_block))
-            });
+            if self.level == 2 {
+                let mut incoming_to_merge = Vec::new();
+                let mut incoming_stand_still = Vec::new();
+
+                let mut check_one_block = |i: usize, block_i: &LSMBlock<'a>| {
+                    for (j, block_j) in blocks.iter().enumerate() {
+                        if i != j && LSMBlock::interleave(block_i, block_j) {
+                            incoming_to_merge.push(block_i.clone());
+                            return;
+                        }
+                    }
+                    for self_block in self_to_merge.iter() {
+                        if LSMBlock::interleave(block_i, self_block) {
+                            incoming_to_merge.push(block_i.clone());
+                            return;
+                        }
+                    }
+                    incoming_stand_still.push(block_i.clone());
+                };
+
+                for (i, block_i) in blocks.iter().enumerate() {
+                    check_one_block(i, block_i);
+                }
+
+                (incoming_to_merge, incoming_stand_still)
+            } else {
+                split2(blocks, |block| {
+                    self_to_merge
+                        .iter()
+                        .any(|self_block| LSMBlock::interleave(block, self_block))
+                })
+            };
 
         let removed_files =
             self_to_merge
@@ -401,6 +430,58 @@ mod test {
                 .collect::<Vec<_>>();
 
         let mut level2 = LSMLevel::with_blocks(2, lv2_blocks, &lsm_config, lv2_file_id_manager);
+        let _ = level2.merge_blocks(lv1_blocks);
+
+        for (&k, &v) in expectations.iter() {
+            assert_eq!(level2.get(k, &mut cache_manager).unwrap(), v)
+        }
+
+        for (i, b1) in level2.blocks.iter().enumerate() {
+            for (j, b2) in level2.blocks.iter().enumerate() {
+                if i != j {
+                    assert!(!LSMBlock::interleave(b1, b2))
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge2() {
+        // LV1 [AAA ~ AAH]      [AAQ ~ AAX]
+        //          [AAE ~ AAL]
+        // LV2 (Empty)
+        //
+        // expected output blocks, blocks marked '*' are newly created
+        // LV2 *[AAA ~ AAH] *[AAI ~ AAL] [AAQ ~ AAX]
+
+        let lsm_config = LSMConfig::testing("tdb4");
+
+        // We start from a large file id so that it does not over write our existing blocks
+        let mut cache_manager = LSMCacheManager::new(4);
+
+        let lv1_data = vec![
+            gen_kv("aaa", 8),
+            gen_kv("aae", 8),
+            gen_kv("aaq", 8)
+        ];
+
+        let mut expectations = BTreeMap::new();
+        lv1_data.iter().for_each(|kvs| {
+            kvs.iter().for_each(|KVPair(k, v)| {
+                let _ = expectations.insert(k, v);
+            })
+        });
+
+        let lv1_blocks =
+            lv1_data
+                .clone().into_iter()
+                .enumerate()
+                .map(|(i, kvs)| {
+                    LSMBlock::create("tdb4", 1, i as u32, kvs)
+                })
+                .collect::<Vec<_>>();
+
+        let mut level2 = LSMLevel::new(2, &lsm_config, FileIdManager::default());
         let _ = level2.merge_blocks(lv1_blocks);
 
         for (&k, &v) in expectations.iter() {
