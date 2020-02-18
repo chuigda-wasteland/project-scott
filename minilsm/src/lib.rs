@@ -209,4 +209,28 @@ mod tests {
             assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
         }
     }
+
+    #[test]
+    fn overlapping_test() {
+        let mut kvs = Vec::new();
+        for _ in 0..8 {
+            kvs.append(&mut gen_kv("aaa", 32))
+        }
+
+        let mut rng = ThreadRng::default();
+        kvs.shuffle(&mut rng);
+
+        let lsm_config = LSMConfig::testing("ol_test_db");
+        let mut lsm = LSM::new(lsm_config);
+        let mut memds = BTreeMap::new();
+
+        for KVPair(k, v) in kvs.iter() {
+            lsm.put(k, v);
+            memds.insert(k, v);
+        }
+
+        for (&k, &v) in memds.iter() {
+            assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
+        }
+    }
 }
