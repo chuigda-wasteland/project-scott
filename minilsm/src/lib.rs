@@ -51,7 +51,7 @@ fn split2<T, F>(mut v: Vec<T>, f: F) -> (Vec<T>, Vec<T>)
     (v1, v)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LSMConfig {
     pub db_name: String,
     pub level1_size: usize,
@@ -113,6 +113,10 @@ struct LSM<'a> {
 
 impl Drop for LSM<'_> {
     fn drop(&mut self) {
+        if self.mut_table.len() == 0 {
+            return;
+        }
+
         LSMBlock::create(&self.config.db_name, 0, 0,
                          self.mut_table.iter().map(|(k, v)| {
                              KVPair(k.to_string(), v.to_string())
@@ -262,7 +266,7 @@ mod tests {
     fn overlapping_test() {
         let mut kvs = Vec::new();
         for _ in 0..8 {
-            kvs.append(&mut gen_kv("aaa", 57))
+            kvs.append(&mut gen_kv("aaa", 57));
         }
 
         let mut rng = ThreadRng::default();
@@ -277,6 +281,33 @@ mod tests {
             memds.insert(k, v);
         }
 
+        for (&k, &v) in memds.iter() {
+            assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
+        }
+    }
+
+    #[test]
+    fn reopen_test() {
+        let mut kvs = Vec::new();
+        kvs.append(&mut gen_kv("aaa", 406));
+        kvs.append(&mut gen_kv("aja", 356));
+        let mut rng = ThreadRng::default();
+        kvs.shuffle(&mut rng);
+
+        let lsm_config = LSMConfig::testing("rop_test_db");
+        let mut memds = BTreeMap::new();
+
+        {
+            let mut lsm = LSM::new(lsm_config.clone());
+            for KVPair(k, v) in kvs.iter() {
+                lsm.put(k, v);
+                memds.insert(k, v);
+            }
+
+            std::mem::drop(lsm);
+        }
+
+        let lsm = LSM::open(lsm_config);
         for (&k, &v) in memds.iter() {
             assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
         }

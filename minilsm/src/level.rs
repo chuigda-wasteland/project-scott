@@ -54,12 +54,16 @@ impl<'a> LSMLevel<'a> {
         let mut file_id_line = String::new();
         f.read_line(&mut file_id_line).unwrap();
 
+        eprintln!("{}", file_id_line);
+
         let cur_file_id = file_id_line.trim().parse::<u32>().unwrap();
         let file_id_manager = FileIdManager::new(cur_file_id);
 
         let mut blocks = Vec::new();
         while f.read_line(&mut file_id_line).unwrap() != 0 {
             let mut parts: Vec<String> = file_id_line.trim().split(":").map(|s| s.to_string()).collect();
+
+            eprintln!("{} / {:?}", level_meta_file, parts);
 
             let upper_bound = parts.pop().unwrap();
             let lower_bound = parts.pop().unwrap();
@@ -79,7 +83,8 @@ impl<'a> LSMLevel<'a> {
         let mut f = File::with_options().write(true).create(true).truncate(true).open(level_meta_file).unwrap();
         write!(f, "{}\n", self.file_id_manager.current()).unwrap();
         for block in self.blocks.iter() {
-            write!(f, "{}:{}:{}\n", block.block_file_name(), block.lower_bound(), block.upper_bound()).unwrap();
+            write!(f, "{}:{}:{}:{}\n", block.origin_level, block.block_file_id,
+                   block.lower_bound(), block.upper_bound()).unwrap();
         }
     }
 
@@ -355,7 +360,6 @@ mod test {
         let lsm_config = LSMConfig::testing("tdb2");
         let file_id_manager = FileIdManager::default();
         let mut cache_manager = LSMCacheManager::new(4);
-
 
         let kvs = vec![
             gen_kv("aaa", lsm_config.block_size),

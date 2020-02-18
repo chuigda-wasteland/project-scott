@@ -8,8 +8,8 @@ use crate::KVPair;
 #[derive(Clone)]
 pub struct LSMBlock<'a> {
     db_name: &'a str,
-    origin_level: u32,
-    block_file_id: u32,
+    pub(crate) origin_level: u32,
+    pub(crate) block_file_id: u32,
     lower_bound: String,
     upper_bound: String
 }
