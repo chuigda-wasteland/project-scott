@@ -46,7 +46,7 @@ impl<'a> LSMLevel<'a> {
         LSMLevel { level, blocks: Vec::new(), config, file_id_manager }
     }
 
-    fn from_meta_file(config: &'a LSMConfig, level: u32) -> Self {
+    pub(crate) fn from_meta_file(config: &'a LSMConfig, level: u32) -> Self {
         let level_meta_file = LSMLevel::meta_file_name_int(&config.db_name, level);
         let f = File::with_options().read(true).open(&level_meta_file).unwrap();
         let mut f = BufReader::new(f);

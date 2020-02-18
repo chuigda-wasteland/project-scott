@@ -13,7 +13,7 @@ impl LSMBlockCache {
     pub fn new(block_file_meta: LSMBlockMeta) -> Self {
         let block_file_name = block_file_meta.block_file_name();
         let file = File::with_options().read(true).open(block_file_name).unwrap();
-        let mut file = BufReader::new(file);
+        let file = BufReader::new(file);
 
         let mut ret = LSMBlockCache {
             data: BTreeMap::new()

@@ -21,6 +21,12 @@ pub struct LSMBlockMeta<'a> {
     block_file_id: u32
 }
 
+impl<'a> LSMBlockMeta<'a> {
+    pub(crate) fn new(db_name: &'a str, origin_level: u32, block_file_id: u32) -> Self {
+        LSMBlockMeta { db_name, origin_level, block_file_id }
+    }
+}
+
 impl LSMBlockMeta<'_> {
     pub fn block_file_name(&self) -> String {
         LSMBlock::block_file_name_int(self.db_name, self.origin_level, self.block_file_id)

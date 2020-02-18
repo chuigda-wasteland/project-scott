@@ -19,6 +19,8 @@ use std::pin::Pin;
 use std::ptr::NonNull;
 use std::ops::{Deref, DerefMut};
 use std::borrow::{Borrow, BorrowMut};
+use std::fs::File;
+use std::io::{Write, Read};
 
 #[derive(Debug, Clone)]
 pub struct KVPair(String, String);
@@ -109,15 +111,45 @@ struct LSM<'a> {
     levels: Vec<LSMLevel<'a>>
 }
 
+impl Drop for LSM<'_> {
+    fn drop(&mut self) {
+        LSMBlock::create(&self.config.db_name, 0, 0,
+                         self.mut_table.iter().map(|(k, v)| {
+                             KVPair(k.to_string(), v.to_string())
+                         }).collect());
+    }
+}
+
 impl<'a> LSM<'a> {
     pub fn new(config: LSMConfig) -> Self {
         let cache_manager = LSMCacheManager::new(config.max_cache_size);
-        let mut ret = LSM {
+        let ret = LSM {
             config,
             cache_manager: RefCell::new(cache_manager),
             mut_table: BTreeMap::new(),
             levels: Vec::new()
         };
+        ret
+    }
+
+    pub fn open(config: LSMConfig) -> Self {
+        let mut ret = LSM::new(config);
+        let manifest_file_name = ret.manifest_file_name();
+        let mut f = File::with_options().read(true).open(manifest_file_name).unwrap();
+        let mut buf = String::new();
+        f.read_to_string(&mut buf).unwrap();
+        let levels = buf.trim().parse::<u32>().unwrap();
+        for i in 1..=levels {
+            ret.levels.push(LSMLevel::from_meta_file(ret.self_config(), i));
+        }
+
+        let mut cache_block_iter =
+            LSMBlockIter::new(
+                LSMBlockMeta::new(&ret.config.db_name, 0, 0));
+        while let Some(KVPair(k, v)) = cache_block_iter.next() {
+            ret.mut_table.insert(k, v);
+        }
+
         ret
     }
 
@@ -174,12 +206,28 @@ impl<'a> LSM<'a> {
             require_merge = require_merge_next;
             next_level_idx += 1;
         }
+
+        self.update_manifest();
     }
 
     fn remove_files(files: Vec<LSMBlockMeta<'a>>) {
         for file_meta in files {
             std::fs::remove_file(file_meta.block_file_name()).unwrap();
         }
+    }
+
+    fn update_manifest(&self) {
+        let mut f =
+            File::with_options()
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(self.manifest_file_name()).unwrap();
+        write!(f, "{}", self.levels.len()).unwrap();
+    }
+
+    fn manifest_file_name(&self) -> String {
+        format!("{}_main.mfst", self.config.db_name)
     }
 }
 
@@ -214,7 +262,7 @@ mod tests {
     fn overlapping_test() {
         let mut kvs = Vec::new();
         for _ in 0..8 {
-            kvs.append(&mut gen_kv("aaa", 32))
+            kvs.append(&mut gen_kv("aaa", 57))
         }
 
         let mut rng = ThreadRng::default();
