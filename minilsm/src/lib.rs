@@ -18,7 +18,7 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::ops::{Deref, DerefMut};
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 
 #[derive(Debug, Clone)]
 pub struct KVPair(String, String);
@@ -68,6 +68,8 @@ impl LSMConfig {
            block_size: usize,
            merge_step_size: usize,
            max_cache_size: usize) -> Self {
+        assert!(size_scale >= 2);
+        assert!(merge_step_size <= level2_size);
         LSMConfig {
             db_name: db_name.to_string(),
             level1_size,
@@ -108,7 +110,7 @@ struct LSM<'a> {
 }
 
 impl<'a> LSM<'a> {
-    fn new(config: LSMConfig) -> Self {
+    pub fn new(config: LSMConfig) -> Self {
         let cache_manager = LSMCacheManager::new(config.max_cache_size);
         let mut ret = LSM {
             config,
@@ -117,6 +119,12 @@ impl<'a> LSM<'a> {
             levels: Vec::new()
         };
         ret
+    }
+
+    pub fn self_config(&self) -> &'a LSMConfig {
+        unsafe {
+            (&self.config as *const LSMConfig).as_ref().unwrap()
+        }
     }
 
     pub fn get(&self, key: &str) -> Option<String> {
@@ -129,10 +137,6 @@ impl<'a> LSM<'a> {
             }
         }
         None
-    }
-
-    fn self_config(&self) -> &'a LSMConfig {
-        unsafe { (&self.config as *const LSMConfig).as_ref().unwrap() }
     }
 
     pub fn put(&mut self, key: impl ToString, value: impl ToString) {
@@ -151,7 +155,27 @@ impl<'a> LSM<'a> {
                                            FileIdManager::default()))
         }
 
-        unimplemented!()
+        let mut require_merge = self.levels[0].create_block(block_data);
+        let mut next_level_idx = 1;
+        while require_merge {
+            if self.levels.len() <= next_level_idx {
+                self.levels.push(LSMLevel::new(next_level_idx as u32 + 1, self.self_config(),
+                                               FileIdManager::default()));
+            }
+            let blocks_to_merge = self.levels[next_level_idx - 1].blocks_to_merge();
+            let (removed_files, require_merge_next) =
+                self.levels[next_level_idx].merge_blocks(blocks_to_merge);
+
+            LSM::remove_files(removed_files);
+            require_merge = require_merge_next;
+            next_level_idx += 1;
+        }
+    }
+
+    fn remove_files(files: Vec<LSMBlockMeta<'a>>) {
+        for file_meta in files {
+            std::fs::remove_file(file_meta.block_file_name()).unwrap();
+        }
     }
 }
 

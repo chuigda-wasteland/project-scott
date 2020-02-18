@@ -1,4 +1,4 @@
-use crate::block::{LSMBlock, LSMBlockIter};
+use crate::block::{LSMBlock, LSMBlockIter, LSMBlockMeta};
 use crate::cache::LSMCacheManager;
 use crate::metadata::ManifestUpdate;
 use crate::{KVPair, split2, LSMConfig};
@@ -181,12 +181,17 @@ impl<'a> LSMLevel<'a> {
         blocks_built
     }
 
-    fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock<'a>>) -> (ManifestUpdate, bool) {
-        if self.level == 1 {
-            self.blocks.append(&mut blocks);
-            let b = self.blocks.len() > self.config.level1_size;
-            return (ManifestUpdate::default(), b)
-        }
+    pub fn create_block(&mut self, block_data: Vec<KVPair>) -> bool {
+        assert_eq!(self.level, 1);
+
+        let new_block = LSMBlock::create(&self.config.db_name, 1,
+                                         self.file_id_manager.allocate(), block_data);
+        self.blocks.push(new_block);
+        self.blocks.len() > self.level_size_max()
+    }
+
+    pub fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock<'a>>) -> (Vec<LSMBlockMeta<'a>>, bool) {
+        assert_ne!(self.level, 1);
 
         let mut self_blocks = Vec::new();
         self_blocks.append(&mut self.blocks);
@@ -234,7 +239,7 @@ impl<'a> LSMLevel<'a> {
             self_to_merge
                 .iter()
                 .chain(incoming_to_merge.iter())
-                .map(|block| block.block_file_name().to_string())
+                .map(|block| block.metadata())
                 .collect::<Vec<_>>();
 
         self_to_merge.append(&mut incoming_to_merge);
@@ -249,20 +254,36 @@ impl<'a> LSMLevel<'a> {
         let mut new_blocks =
             LSMLevel::merge_blocks_intern(merging_iters, self.level,
                                           self.config, &mut self.file_id_manager);
-        let added_files =
-            new_blocks
-                .iter()
-                .map(|block| block.block_file_name().to_string())
-                .collect();
 
         let mut all_blocks = self_stand_still;
         all_blocks.append(&mut incoming_stand_still);
         all_blocks.append(&mut new_blocks);
 
         self.blocks.append(&mut all_blocks);
-        let b = self.blocks.len() >= 10usize.pow(self.level);
-        (ManifestUpdate::new(added_files, removed_files),
-         b)
+        let b = self.blocks.len() > self.level_size_max();
+        (removed_files, b)
+    }
+
+    fn level_size_max(&self) -> usize {
+        if self.level == 1 {
+            self.config.level1_size
+        } else {
+            self.config.level2_size * self.config.size_scale.pow(self.level - 2)
+        }
+    }
+
+    pub fn blocks_to_merge(&mut self) -> Vec<LSMBlock<'a>> {
+        assert!(self.blocks.len() > self.level_size_max());
+
+        let mut ret = Vec::new();
+        if self.level == 1 {
+            ret.append(&mut self.blocks);
+        } else {
+            for i in 0..self.config.merge_step_size {
+                ret.push(self.blocks.pop().unwrap());
+            }
+        }
+        ret
     }
 }
 
