@@ -138,8 +138,6 @@ mod test {
     use crate::block::LSMBlock;
     use crate::cache::LSMCacheManager;
     use crate::KVPair;
-    use std::fs::File;
-    use std::io::{BufReader, BufRead};
 
     #[test]
     fn test_build_sst() {

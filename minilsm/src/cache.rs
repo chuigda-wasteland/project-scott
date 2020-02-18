@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{BufReader, BufRead};
 
 use lru::LruCache;
-use crate::block::{LSMBlock, LSMBlockMeta};
+use crate::block::LSMBlockMeta;
 
 pub struct LSMBlockCache {
     data: BTreeMap<String, String>

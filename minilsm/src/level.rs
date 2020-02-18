@@ -1,6 +1,5 @@
 use crate::block::{LSMBlock, LSMBlockIter, LSMBlockMeta};
 use crate::cache::LSMCacheManager;
-use crate::metadata::ManifestUpdate;
 use crate::{KVPair, split2, LSMConfig};
 
 use std::cmp::Ordering;
@@ -192,13 +191,13 @@ impl<'a> LSMLevel<'a> {
         self.blocks.len() > self.level_size_max()
     }
 
-    pub fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock<'a>>) -> (Vec<LSMBlockMeta<'a>>, bool) {
+    pub fn merge_blocks(&mut self, blocks: Vec<LSMBlock<'a>>) -> (Vec<LSMBlockMeta<'a>>, bool) {
         assert_ne!(self.level, 1);
 
         let mut self_blocks = Vec::new();
         self_blocks.append(&mut self.blocks);
 
-        let (mut self_to_merge, mut self_stand_still) =
+        let (mut self_to_merge, self_stand_still) =
             split2(self_blocks, |self_block| {
                 blocks.iter().any(|block| LSMBlock::interleave(block, self_block))
             });
@@ -281,7 +280,7 @@ impl<'a> LSMLevel<'a> {
         if self.level == 1 {
             ret.append(&mut self.blocks);
         } else {
-            for i in 0..self.config.merge_step_size {
+            for _ in 0..self.config.merge_step_size {
                 ret.push(self.blocks.pop().unwrap());
             }
         }
@@ -298,7 +297,7 @@ mod test {
 
     #[test]
     fn test_level1_lookup() {
-        let mut data_pieces = vec![
+        let data_pieces = vec![
             vec![
                 ("ice1000", "100"),
                 ("xyy", "99"),

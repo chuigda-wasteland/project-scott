@@ -43,7 +43,7 @@ pub(crate) fn gen_keys_range(start: &str, count: usize) -> Vec<String> {
 pub(crate) fn gen_values(count: usize) -> Vec<String> {
     let mut ret = Vec::new();
     let search_vec: &Vec<String> = CANDIDATE_VALUES.deref();
-    for i in 0..count {
+    for _ in 0..count {
         ret.push(search_vec[rand::thread_rng().gen_range(0, search_vec.len())].to_owned());
     }
     ret

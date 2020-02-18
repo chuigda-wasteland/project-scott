@@ -3,22 +3,17 @@
 
 mod cache;
 mod block;
-mod metadata;
 mod level;
 mod test_util;
 
 use cache::*;
 use block::*;
-use metadata::*;
 use level::*;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::cell::RefCell;
-use std::pin::Pin;
-use std::ptr::NonNull;
-use std::ops::{Deref, DerefMut};
-use std::borrow::{Borrow, BorrowMut};
+use std::ops::DerefMut;
 use std::fs::File;
 use std::io::{Write, Read};
 
