@@ -54,25 +54,22 @@ impl<'a> LSMLevel<'a> {
         let mut file_id_line = String::new();
         f.read_line(&mut file_id_line).unwrap();
 
-        eprintln!("{}", file_id_line);
-
         let cur_file_id = file_id_line.trim().parse::<u32>().unwrap();
         let file_id_manager = FileIdManager::new(cur_file_id);
 
         let mut blocks = Vec::new();
+        file_id_line.clear();
         while f.read_line(&mut file_id_line).unwrap() != 0 {
             let mut parts: Vec<String> = file_id_line.trim().split(":").map(|s| s.to_string()).collect();
-
-            eprintln!("{} / {:?}", level_meta_file, parts);
+            assert_eq!(parts.len(), 4);
 
             let upper_bound = parts.pop().unwrap();
             let lower_bound = parts.pop().unwrap();
             let block_file_id = parts.pop().unwrap().parse::<u32>().unwrap();
             let origin_level = parts.pop().unwrap().parse::<u32>().unwrap();
 
-            assert_eq!(parts.len(), 3);
-
             blocks.push(LSMBlock::new(&config.db_name, origin_level, block_file_id, lower_bound, upper_bound));
+            file_id_line.clear();
         }
 
         LSMLevel::with_blocks(level, blocks, config, file_id_manager)
