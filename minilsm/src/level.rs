@@ -74,7 +74,7 @@ impl<'a> LSMLevel<'a> {
         LSMLevel::with_blocks(level, blocks, config, file_id_manager)
     }
 
-    fn update_meta_file(&self) {
+    pub fn update_meta_file(&self) {
         let level_meta_file = self.meta_file_name();
         let mut f = File::with_options().write(true).create(true).truncate(true).open(level_meta_file).unwrap();
         write!(f, "{}\n", self.file_id_manager.current()).unwrap();

@@ -156,6 +156,8 @@ impl<'a> LSM<'a> {
         }
 
         let mut require_merge = self.levels[0].create_block(block_data);
+        self.levels[0].update_meta_file();
+
         let mut next_level_idx = 1;
         while require_merge {
             if self.levels.len() <= next_level_idx {
@@ -165,6 +167,8 @@ impl<'a> LSM<'a> {
             let blocks_to_merge = self.levels[next_level_idx - 1].blocks_to_merge();
             let (removed_files, require_merge_next) =
                 self.levels[next_level_idx].merge_blocks(blocks_to_merge);
+            self.levels[next_level_idx - 1].update_meta_file();
+            self.levels[next_level_idx].update_meta_file();
 
             LSM::remove_files(removed_files);
             require_merge = require_merge_next;
@@ -181,9 +185,28 @@ impl<'a> LSM<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{LSMConfig, LSM, KVPair};
+    use crate::test_util::gen_kv;
+    use rand::prelude::{ThreadRng, SliceRandom};
+    use std::collections::BTreeMap;
+
     #[test]
-    fn it_works() {
-        println!("{}", env!("PWD"));
-        assert_eq!(2 + 2, 4);
+    fn workload_test() {
+        let mut kvs = gen_kv("aaa", 512);
+        let mut rng = ThreadRng::default();
+        kvs.shuffle(&mut rng);
+
+        let lsm_config = LSMConfig::testing("wl_test_db");
+        let mut lsm = LSM::new(lsm_config);
+        let mut memds = BTreeMap::new();
+
+        for KVPair(k, v) in kvs.iter() {
+            lsm.put(k, v);
+            memds.insert(k, v);
+        }
+
+        for (&k, &v) in memds.iter() {
+            assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
+        }
     }
 }
