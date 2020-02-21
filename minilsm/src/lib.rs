@@ -16,6 +16,7 @@ use std::cell::RefCell;
 use std::ops::DerefMut;
 use std::fs::File;
 use std::io::{Write, Read};
+use std::fs;
 
 const DELETION_MARK: &'static str = "_";
 const SPLIT_MARK: &'static str = ":";
@@ -112,6 +113,7 @@ struct LSM<'a> {
 
 impl Drop for LSM<'_> {
     fn drop(&mut self) {
+        self.update_manifest();
         if self.mut_table.len() == 0 {
             return;
         }
@@ -144,6 +146,15 @@ impl<'a> LSM<'a> {
         let levels = buf.trim().parse::<u32>().unwrap();
         for i in 1..=levels {
             ret.levels.push(LSMLevel::from_meta_file(ret.self_config(), i));
+        }
+
+        if !fs::read_dir(".")
+              .unwrap()
+              .any(|d| {
+                  d.unwrap().file_name().to_str().unwrap()
+                  == LSMBlockMeta::new(&ret.config.db_name, 0, 0).block_file_name().as_str()
+              }) {
+            return ret;
         }
 
         let mut cache_block_iter =
@@ -313,5 +324,15 @@ mod tests {
         for (&k, &v) in memds.iter() {
             assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
         }
+    }
+
+    #[test]
+    fn reopen_empty() {
+        let lsm_config = LSMConfig::testing("rop_empty_db");
+        let lsm = LSM::new(lsm_config.clone());
+        std::mem::drop(lsm);
+
+        let lsm = LSM::open(lsm_config);
+        assert_eq!(2 + 2, 4);
     }
 }
