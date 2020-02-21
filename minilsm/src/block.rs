@@ -161,7 +161,7 @@ mod test {
             ("Lyzh", "Railway Middle School"),
             ("Accelerator", "長期コンピューター学校"),
             ("MisakawaMikoto", "常盤台中学校"),
-            ("KamijouTouma", "PERMISSION_DENIED"),
+            ("KamijouTouma", "PERMISSION_DENIED")
         ];
         data.sort_by(|&(k1, _), &(k2, _)| k1.cmp(k2));
         let data =
@@ -184,7 +184,7 @@ mod test {
             ("Lyzh", "Railway Middle School"),
             ("Accelerator", "長期コンピューター学校"),
             ("MisakawaMikoto", "常盤台中学校"),
-            ("KamijouTouma", "PERMISSION_DENIED"),
+            ("KamijouTouma", "PERMISSION_DENIED")
         ];
         let mut data =
             data.iter()

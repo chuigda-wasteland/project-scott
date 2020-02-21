@@ -67,6 +67,5 @@ impl<'a> LSMCacheManager<'a> {
 mod test {
     #[test]
     fn test_cached_read() {
-
     }
 }

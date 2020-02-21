@@ -84,7 +84,7 @@ impl LSMConfig {
     }
 
     fn testing(db_name: impl ToString) -> Self {
-        // WARNING: Do NOT change these parameters. Changing these parameters requires changes of tests. see level.rs
+        // WARNING: Do NOT change these parameters. Changing these parameters requires changes on tests. see level.rs
         // for further details.
         LSMConfig::new(db_name, 2, 4, 2, 8, 4, 16)
     }
@@ -292,7 +292,8 @@ mod tests {
         }
 
         for (&k, &v) in memds.iter() {
-            assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
+            eprintln!("expected kv-pair: {} -> {}", k, v);
+            assert_eq!(lsm.get(k).unwrap(), *v);
         }
     }
 
@@ -322,7 +323,7 @@ mod tests {
 
         let lsm = LSM::open(lsm_config);
         for (&k, &v) in memds.iter() {
-            assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
+            assert_eq!(lsm.get(k).unwrap(), *v);
         }
     }
 

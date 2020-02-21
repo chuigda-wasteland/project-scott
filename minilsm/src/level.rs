@@ -100,15 +100,35 @@ impl<'a> LSMLevel<'a> {
     }
 
     pub fn get<'b>(&self, key: &str, cache_manager: &'b mut LSMCacheManager<'a>) -> Option<&'b str> {
-        unsafe {
-            let cache_manager= cache_manager as *mut LSMCacheManager;
-            for block in self.blocks.iter().rev() {
-                if let Some(value) = block.get(key, cache_manager.as_mut().unwrap()) {
-                    return Some(value);
+        if self.level == 1 {
+            unsafe {
+                let cache_manager = cache_manager as *mut LSMCacheManager;
+                for block in self.blocks.iter().rev() {
+                    if let Some(value) = block.get(key, cache_manager.as_mut().unwrap()) {
+                        return Some(value);
+                    }
                 }
             }
+            None
+        } else {
+            let mut left: usize = 0;
+            let mut right: usize = self.blocks.len();
+
+            while left < right {
+                let mid = (left + right) / 2;
+                let mid_block = &self.blocks[mid];
+                if mid_block.upper_bound() < key {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+
+            if right == self.blocks.len() {
+                return None;
+            }
+            self.blocks[right].get(key, cache_manager)
         }
-        None
     }
 
     fn merge_blocks_intern(mut iters: Vec<LSMBlockIter>, level: u32,
@@ -264,6 +284,8 @@ impl<'a> LSMLevel<'a> {
         all_blocks.append(&mut new_blocks);
 
         self.blocks.append(&mut all_blocks);
+        self.blocks.sort_by(|block1, block2| block1.lower_bound().cmp(block2.lower_bound()));
+
         let b = self.blocks.len() > self.level_size_max();
         (removed_files, b)
     }
