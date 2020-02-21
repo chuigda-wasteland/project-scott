@@ -3,7 +3,7 @@ use std::fs::File;
 use std::iter::FusedIterator;
 
 use crate::cache::LSMCacheManager;
-use crate::KVPair;
+use crate::{KVPair, SPLIT_MARK};
 
 #[derive(Clone)]
 pub struct LSMBlock<'a> {
@@ -56,7 +56,7 @@ impl Iterator for LSMBlockIter {
         if bytes_read == 0 {
             None
         } else {
-            let parts: Vec<_> = buf.trim().split(":").collect();
+            let parts: Vec<_> = buf.trim().split(SPLIT_MARK).collect();
             assert_eq!(parts.len(), 2);
             Some(KVPair(parts[0].to_string(), parts[1].to_string()))
         }
@@ -88,7 +88,7 @@ impl<'a> LSMBlock<'a> {
                 .truncate(true)
                 .open(&block_file_name).unwrap();
         for data_line in data {
-            write!(file, "{}:{}\n", data_line.0, data_line.1).unwrap();
+            write!(file, "{}{}{}\n", data_line.0, SPLIT_MARK, data_line.1).unwrap();
         }
 
         LSMBlock::new(db_name, origin_level, block_file_id, lower_bound, upper_bound)

@@ -4,6 +4,7 @@ use std::io::{BufReader, BufRead};
 
 use lru::LruCache;
 use crate::block::LSMBlockMeta;
+use crate::SPLIT_MARK;
 
 pub struct LSMBlockCache {
     data: BTreeMap<String, String>
@@ -21,7 +22,7 @@ impl LSMBlockCache {
 
         for line in file.lines() {
             let line = line.unwrap();
-            let parts: Vec<_> = line.split(":").collect();
+            let parts: Vec<_> = line.split(SPLIT_MARK).collect();
             assert_eq!(parts.len(), 2);
             ret.data.insert(parts[0].to_string(), parts[1].to_string());
         }

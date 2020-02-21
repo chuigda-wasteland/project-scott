@@ -1,6 +1,6 @@
 use crate::block::{LSMBlock, LSMBlockIter, LSMBlockMeta};
 use crate::cache::LSMCacheManager;
-use crate::{KVPair, split2, LSMConfig};
+use crate::{KVPair, split2, LSMConfig, SPLIT_MARK};
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -59,7 +59,7 @@ impl<'a> LSMLevel<'a> {
         let mut blocks = Vec::new();
         file_id_line.clear();
         while f.read_line(&mut file_id_line).unwrap() != 0 {
-            let mut parts: Vec<String> = file_id_line.trim().split(":").map(|s| s.to_string()).collect();
+            let mut parts: Vec<String> = file_id_line.trim().split(SPLIT_MARK).map(|s| s.to_string()).collect();
             assert_eq!(parts.len(), 4);
 
             let upper_bound = parts.pop().unwrap();
@@ -79,8 +79,11 @@ impl<'a> LSMLevel<'a> {
         let mut f = File::with_options().write(true).create(true).truncate(true).open(level_meta_file).unwrap();
         write!(f, "{}\n", self.file_id_manager.current()).unwrap();
         for block in self.blocks.iter() {
-            write!(f, "{}:{}:{}:{}\n", block.origin_level, block.block_file_id,
-                   block.lower_bound(), block.upper_bound()).unwrap();
+            write!(f, "{}{}{}{}{}{}{}\n",
+                   block.origin_level, SPLIT_MARK,
+                   block.block_file_id, SPLIT_MARK,
+                   block.lower_bound(), SPLIT_MARK,
+                   block.upper_bound()).unwrap();
         }
     }
 

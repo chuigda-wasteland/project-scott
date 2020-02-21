@@ -17,6 +17,9 @@ use std::ops::DerefMut;
 use std::fs::File;
 use std::io::{Write, Read};
 
+const DELETION_MARK: &'static str = "_";
+const SPLIT_MARK: &'static str = ":";
+
 #[derive(Debug, Clone)]
 pub struct KVPair(String, String);
 
