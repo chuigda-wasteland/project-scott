@@ -70,6 +70,7 @@ impl LSMConfig {
            max_cache_size: usize) -> Self {
         assert!(size_scale >= 2);
         assert!(merge_step_size <= level2_size);
+        assert!(merge_step_size > level1_size);
         LSMConfig {
             db_name: db_name.to_string(),
             level1_size,
@@ -84,7 +85,7 @@ impl LSMConfig {
     fn testing(db_name: impl ToString) -> Self {
         // WARNING: Do NOT change these parameters. Changing these parameters requires changes of tests. see level.rs
         // for further details.
-        LSMConfig::new(db_name, 2, 4, 2, 8, 2, 16)
+        LSMConfig::new(db_name, 2, 4, 2, 8, 4, 16)
     }
 
     fn level_size_max(&self, level: usize) -> usize {
@@ -98,7 +99,7 @@ impl LSMConfig {
 
 impl Default for LSMConfig {
     fn default() -> Self {
-        LSMConfig::new("db1", 4, 10, 10, 1024, 4, 16)
+        LSMConfig::new("db1", 4, 10, 10, 1024, 6, 16)
     }
 }
 
@@ -256,7 +257,7 @@ mod tests {
         }
 
         for (&k, &v) in memds.iter() {
-            assert_eq!(lsm.get(k).unwrap(), **memds.get(k).unwrap());
+            assert_eq!(lsm.get(k).unwrap(), *v);
         }
     }
 
@@ -293,6 +294,9 @@ mod tests {
         kvs.shuffle(&mut rng);
 
         let lsm_config = LSMConfig::testing("rop_test_db");
+
+        eprintln!("{}", lsm_config.level_size_max(2));
+
         let mut memds = BTreeMap::new();
 
         {

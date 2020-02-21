@@ -269,11 +269,7 @@ impl<'a> LSMLevel<'a> {
     }
 
     fn level_size_max(&self) -> usize {
-        if self.level == 1 {
-            self.config.level1_size
-        } else {
-            self.config.level2_size * self.config.size_scale.pow(self.level - 2)
-        }
+        self.config.level_size_max(self.level as usize)
     }
 
     pub fn blocks_to_merge(&mut self) -> Vec<LSMBlock<'a>> {

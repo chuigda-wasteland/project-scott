@@ -4,6 +4,7 @@ use std::iter::FusedIterator;
 
 use crate::cache::LSMCacheManager;
 use crate::{KVPair, SPLIT_MARK};
+use std::fmt::{Debug, Formatter, Error};
 
 #[derive(Clone)]
 pub struct LSMBlock<'a> {
@@ -14,11 +15,23 @@ pub struct LSMBlock<'a> {
     upper_bound: String
 }
 
-#[derive(Eq, PartialEq, Debug, Hash, Clone, Copy)]
+impl<'a> Debug for LSMBlock<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}@[{}, {}]", self.block_file_name(), self.lower_bound, self.upper_bound)
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone, Copy)]
 pub struct LSMBlockMeta<'a> {
     db_name: &'a str,
     origin_level: u32,
     block_file_id: u32
+}
+
+impl<'a> Debug for LSMBlockMeta<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}", self.block_file_name())
+    }
 }
 
 impl<'a> LSMBlockMeta<'a> {
