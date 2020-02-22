@@ -241,10 +241,8 @@ impl<'a> LSMLevel<'a> {
             let mid_block = &blocks[mid];
             if mid_block.lower_bound() > high {
                 right = mid;
-            } else if mid_block.upper_bound() < high {
-                left = mid + 1;
             } else {
-                return mid;
+                left = mid + 1;
             }
         }
         right
@@ -261,7 +259,6 @@ impl<'a> LSMLevel<'a> {
         let (self_to_merge, self_stand_still) = if self.level == 2 {
             (self_blocks, Vec::new())
         } else {
-            blocks.sort_by(|block1, block2| block1.lower_bound().cmp(block2.lower_bound()));
             let input_range = (blocks.first().unwrap().lower_bound(), blocks.last().unwrap().upper_bound());
             let lower_idx = LSMLevel::overlapping_lower_bound(input_range, &self_blocks);
             let upper_idx = LSMLevel::overlapping_upper_bound(input_range, &self_blocks);
@@ -269,7 +266,7 @@ impl<'a> LSMLevel<'a> {
             (self_blocks.drain(lower_idx..upper_idx).collect(), self_blocks)
         };
         eprintln!("DBG_LOG: will participate in merging: {:?}", self_to_merge);
-        eprintln!("DBG_LOG: will stand still: {:?}", self_to_merge);
+        eprintln!("DBG_LOG: will stand still: {:?}", self_stand_still);
 
         let removed_files =
             self_to_merge
@@ -308,15 +305,14 @@ impl<'a> LSMLevel<'a> {
     pub fn blocks_to_merge(&mut self) -> Vec<LSMBlock<'a>> {
         assert!(self.blocks.len() > self.level_size_max());
 
-        let mut ret = Vec::new();
         if self.level == 1 {
+            let mut ret = Vec::new();
             ret.append(&mut self.blocks);
+            ret
         } else {
-            for _ in 0..self.config.merge_step_size {
-                ret.push(self.blocks.pop().unwrap());
-            }
+            let n = self.blocks.len();
+            self.blocks.drain(n-self.config.merge_step_size..n).collect()
         }
-        ret
     }
 }
 
