@@ -214,64 +214,70 @@ impl<'a> LSMLevel<'a> {
         self.blocks.len() > self.level_size_max()
     }
 
-    pub fn merge_blocks(&mut self, blocks: Vec<LSMBlock<'a>>) -> (Vec<LSMBlockMeta<'a>>, bool) {
+    fn overlapping_lower_bound(range: (&str, &str), blocks: &Vec<LSMBlock>) -> usize {
+        let (low, _) = range;
+        let mut left = 0;
+        let mut right = blocks.len();
+        while left < right {
+            let mid = (left + right) / 2;
+            let mid_block = &blocks[mid];
+            if mid_block.lower_bound() > low {
+                right = mid
+            } else if mid_block.upper_bound() < low {
+                left = mid + 1;
+            } else {
+                return mid;
+            }
+        }
+        left
+    }
+
+    fn overlapping_upper_bound(range: (&str, &str), blocks: &Vec<LSMBlock>) -> usize {
+        let (_, high) = range;
+        let mut left = 0;
+        let mut right = blocks.len();
+        while left < right {
+            let mid = (left + right) / 2;
+            let mid_block = &blocks[mid];
+            if mid_block.lower_bound() > high {
+                right = mid;
+            } else if mid_block.upper_bound() < high {
+                left = mid + 1;
+            } else {
+                return mid;
+            }
+        }
+        right
+    }
+
+    pub fn merge_blocks(&mut self, mut blocks: Vec<LSMBlock<'a>>) -> (Vec<LSMBlockMeta<'a>>, bool) {
         assert_ne!(self.level, 1);
 
         let mut self_blocks = Vec::new();
         self_blocks.append(&mut self.blocks);
 
-        let (mut self_to_merge, self_stand_still) =
-            split2(self_blocks, |self_block| {
-                blocks.iter().any(|block| LSMBlock::interleave(block, self_block))
-            });
+        let (self_to_merge, self_stand_still) = if self.level == 2 {
+            (self_blocks, Vec::new())
+        } else {
+            blocks.sort_by(|block1, block2| block1.lower_bound().cmp(block2.lower_bound()));
+            let input_range = (blocks.first().unwrap().lower_bound(), blocks.last().unwrap().upper_bound());
+            let lower_idx = LSMLevel::overlapping_lower_bound(input_range, &self_blocks);
+            let upper_idx = LSMLevel::overlapping_upper_bound(input_range, &self_blocks);
 
-        let (mut incoming_to_merge, mut incoming_stand_still) =
-            if self.level == 2 {
-                let mut incoming_to_merge = Vec::new();
-                let mut incoming_stand_still = Vec::new();
-
-                let mut check_one_block = |i: usize, block_i: &LSMBlock<'a>| {
-                    for (j, block_j) in blocks.iter().enumerate() {
-                        if i != j && LSMBlock::interleave(block_i, block_j) {
-                            incoming_to_merge.push(block_i.clone());
-                            return;
-                        }
-                    }
-                    for self_block in self_to_merge.iter() {
-                        if LSMBlock::interleave(block_i, self_block) {
-                            incoming_to_merge.push(block_i.clone());
-                            return;
-                        }
-                    }
-                    incoming_stand_still.push(block_i.clone());
-                };
-
-                for (i, block_i) in blocks.iter().enumerate() {
-                    check_one_block(i, block_i);
-                }
-
-                (incoming_to_merge, incoming_stand_still)
-            } else {
-                split2(blocks, |block| {
-                    self_to_merge
-                        .iter()
-                        .any(|self_block| LSMBlock::interleave(block, self_block))
-                })
-            };
+            (self_blocks.drain(lower_idx..upper_idx).collect(), self_blocks)
+        };
 
         let removed_files =
             self_to_merge
                 .iter()
-                .chain(incoming_to_merge.iter())
+                .chain(blocks.iter())
                 .map(|block| block.metadata())
                 .collect::<Vec<_>>();
-
-        self_to_merge.append(&mut incoming_to_merge);
-        drop(incoming_to_merge);
 
         let merging_iters =
             self_to_merge
                 .iter()
+                .chain(blocks.iter())
                 .map(|block| block.iter())
                 .collect::<Vec<_>>();
 
@@ -280,7 +286,6 @@ impl<'a> LSMLevel<'a> {
                                           self.config, &mut self.file_id_manager);
 
         let mut all_blocks = self_stand_still;
-        all_blocks.append(&mut incoming_stand_still);
         all_blocks.append(&mut new_blocks);
 
         self.blocks.append(&mut all_blocks);
