@@ -292,7 +292,6 @@ mod tests {
         }
 
         for (&k, &v) in memds.iter() {
-            eprintln!("expected kv-pair: {} -> {}", k, v);
             assert_eq!(lsm.get(k).unwrap(), *v);
         }
     }
@@ -306,8 +305,6 @@ mod tests {
         kvs.shuffle(&mut rng);
 
         let lsm_config = LSMConfig::testing("rop_test_db");
-
-        eprintln!("{}", lsm_config.level_size_max(2));
 
         let mut memds = BTreeMap::new();
 
@@ -323,6 +320,7 @@ mod tests {
 
         let lsm = LSM::open(lsm_config);
         for (&k, &v) in memds.iter() {
+            eprintln!("expected kv-pair: {} -> {}", k, v);
             assert_eq!(lsm.get(k).unwrap(), *v);
         }
     }

@@ -140,9 +140,9 @@ impl<'a> LSMBlock<'a> {
     }
 
     pub fn interleave(b1: &LSMBlock, b2: &LSMBlock) -> bool {
-        (b1.lower_bound <= b2.upper_bound && b2.lower_bound <= b1.upper_bound)
-        || (b1.lower_bound <= b2.lower_bound && b1.upper_bound >= b2.upper_bound)
-        || (b2.lower_bound <= b1.lower_bound && b2.upper_bound >= b1.upper_bound)
+        (b1.lower_bound <= b2.upper_bound && b2.lower_bound <= b1.upper_bound)    // intersect
+        || (b1.lower_bound <= b2.lower_bound && b1.upper_bound >= b2.upper_bound) // b1 includes b2
+        || (b2.lower_bound <= b1.lower_bound && b2.upper_bound >= b1.upper_bound) // b2 includes b1
     }
 }
 

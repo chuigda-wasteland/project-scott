@@ -311,7 +311,7 @@ impl<'a> LSMLevel<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::block::LSMBlock;
+    use crate::block::{LSMBlock, LSMBlockMeta};
     use crate::level::{LSMLevel, FileIdManager};
     use crate::cache::LSMCacheManager;
     use crate::{KVPair, LSMConfig};
@@ -534,6 +534,66 @@ mod test {
             for (j, b2) in level2.blocks.iter().enumerate() {
                 if i != j {
                     assert!(!LSMBlock::interleave(b1, b2))
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_issue_24() {
+        let lsm_config =
+            LSMConfig::new("test_issue24",
+                           1, 2, 2,
+                           4, 2, 2);
+        let mut file_id_manager = FileIdManager::new(10);
+
+        let lv3_blocks = vec![
+            vec![
+                kv_pair!("AAA", "比赛爬山"),
+                kv_pair!("AAB", "比赛拔河"),
+                kv_pair!("AAW", "我经济上不如你们"),
+                kv_pair!("AAX", "我身体比你们棒"),
+            ],
+            vec![
+                kv_pair!("ABA", "打黑除恶"),
+                kv_pair!("ABB", "我有思想准备"),
+                kv_pair!("ABC", "是要触及一些人的利益"),
+                kv_pair!("ABD", "也有一些人"),
+            ],
+            vec![
+                kv_pair!("ABE", "给我泼脏水"),
+                kv_pair!("ABF", "说我儿子在外面开红色法拉利"),
+                kv_pair!("ABG", "一派胡言"),
+                kv_pair!("ABH", "我和我妻子没有任何个人财产"),
+            ]
+        ].into_iter().enumerate().map(|(i, kvs)| {
+            LSMBlock::create("test_issue24", 3, i as u32, kvs)
+        }).collect::<Vec<_>>();
+        let mut lv3 = LSMLevel::with_blocks(3, lv3_blocks, &lsm_config, file_id_manager);
+
+        let lv2_blocks = vec![
+            vec![
+                kv_pair!("AAW", "几十年就是这样下来了"),
+                kv_pair!("AAX", "我妻子是律师事务所有名的律师"),
+                kv_pair!("AAY", "在大连期间搞律师事务所就很成功"),
+                kv_pair!("AAZ", "北大教授王铁涯那是她的老师")
+            ],
+            vec![
+                kv_pair!("ABE", "我不是新闻工作者"),
+                kv_pair!("ABF", "但是我见得多了"),
+                kv_pair!("ABX", "西方发达国家有哪个我没去过"),
+                kv_pair!("ABY", "美国的华莱士比你们不知高到哪里去了")
+            ]
+        ].into_iter().enumerate().map(|(i, kvs)| {
+            LSMBlock::create("test_issue24", 2, i as u32, kvs)
+        }).collect::<Vec<_>>();
+
+        lv3.merge_blocks(lv2_blocks);
+        lv3.update_meta_file();
+        for (i, b1) in lv3.blocks.iter().enumerate() {
+            for (j, b2) in lv3.blocks.iter().enumerate() {
+                if i != j {
+                    assert!(!LSMBlock::interleave(b1, b2));
                 }
             }
         }
