@@ -248,14 +248,14 @@ impl<'a> LSM<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{LSMConfig, LSM, KVPair};
-    use crate::test_util::gen_kv;
+    use crate::test_util::{gen_kv, FakeRng};
     use rand::prelude::{ThreadRng, SliceRandom};
     use std::collections::BTreeMap;
 
     #[test]
     fn workload_test() {
         let mut kvs = gen_kv("aaa", 512);
-        let mut rng = ThreadRng::default();
+        let mut rng = FakeRng::default();
         kvs.shuffle(&mut rng);
 
         let lsm_config = LSMConfig::testing("wl_test_db");

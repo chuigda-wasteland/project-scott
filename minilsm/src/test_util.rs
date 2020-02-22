@@ -1,11 +1,48 @@
 use lazy_static::lazy_static;
 use std::ops::Deref;
-use rand::Rng;
+use rand::{Rng, RngCore, Error};
+use rand::rngs::ThreadRng;
 use crate::KVPair;
+use std::thread::Thread;
 
 #[macro_export]
 macro_rules! kv_pair {
     ($k:expr, $v:expr) => (KVPair($k.to_owned(), $v.to_owned()));
+}
+
+pub(crate) struct FakeRng {
+    current: u64
+}
+
+impl FakeRng {
+    fn new(seed: u64) -> Self {
+        FakeRng { current: seed }
+    }
+}
+
+impl Default for FakeRng {
+    fn default() -> Self {
+        FakeRng::new(19270412)
+    }
+}
+
+impl RngCore for FakeRng {
+    fn next_u32(&mut self) -> u32 {
+        self.current = (self.current * 1919810 + 114514) % 19260817;
+        self.current as u32
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.next_u32() as u64
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        unimplemented!()
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
+        unimplemented!()
+    }
 }
 
 lazy_static! {
