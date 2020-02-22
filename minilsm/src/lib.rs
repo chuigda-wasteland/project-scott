@@ -268,6 +268,7 @@ mod tests {
         }
 
         for (&k, &v) in memds.iter() {
+            eprintln!("DBG_LOG: expecting {} -> {}", k, v);
             assert_eq!(lsm.get(k).unwrap(), *v);
         }
     }
