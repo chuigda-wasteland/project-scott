@@ -225,8 +225,8 @@ impl<'a> LSM<'a> {
     }
 
     fn remove_files(files: Vec<LSMBlockMeta<'a>>) {
-        for file_meta in files {
-            std::fs::remove_file(file_meta.block_file_name()).unwrap();
+        for _file_meta in files {
+            // std::fs::remove_file(file_meta.block_file_name()).unwrap();
         }
     }
 

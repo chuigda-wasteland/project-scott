@@ -268,8 +268,8 @@ impl<'a> LSMLevel<'a> {
 
             (self_blocks.drain(lower_idx..upper_idx).collect(), self_blocks)
         };
-        eprintln!("DBG_LOG: {:?} will participate in merging", self_to_merge);
-        eprintln!("DBG_LOG: {:?} will stand still", self_to_merge);
+        eprintln!("DBG_LOG: will participate in merging: {:?}", self_to_merge);
+        eprintln!("DBG_LOG: will stand still: {:?}", self_to_merge);
 
         let removed_files =
             self_to_merge
@@ -288,7 +288,8 @@ impl<'a> LSMLevel<'a> {
         let mut new_blocks =
             LSMLevel::merge_blocks_intern(merging_iters, self.level,
                                           self.config, &mut self.file_id_manager);
-        eprintln!("DBG_LOG: newly produced blocks are {:?}", new_blocks);
+        eprintln!("DBG_LOG: newly produced blocks are {:?}\n", new_blocks);
+
 
         let mut all_blocks = self_stand_still;
         all_blocks.append(&mut new_blocks);
